@@ -206,6 +206,14 @@ export const nextPostPage =
   
   export default BlogPage;
   
+  const Cta = props => {
+    return <h2>{props.heading}</h2>
+  }
+
+  const components = {
+    Cta: Cta,
+  }
+
   const ContentSection = ({ content }) => {
     return (
       <div className="relative py-16 bg-white overflow-hidden">

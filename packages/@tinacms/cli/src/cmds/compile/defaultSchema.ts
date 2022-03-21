@@ -27,13 +27,23 @@ export default defineSchema({
           name: "title",
         },
         {
-          type: "string",
-          label: "Blog Post Body",
-          name: "body",
+          type: 'rich-text',
+          label: 'Body',
+          name: 'body',
           isBody: true,
-          ui: {
-            component: "textarea"
-          },
+          templates: [
+            {
+              name: 'Cta',
+              label: 'Call to Action',
+              fields: [
+                {
+                  type: 'string',
+                  name: 'heading',
+                  label: 'Heading',
+                },
+              ],
+            },
+          ],
         },
       ],
     },
