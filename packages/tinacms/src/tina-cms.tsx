@@ -112,6 +112,11 @@ class ErrorBoundary extends React.Component {
               encountering this error. There is a bigger issue with the site.
               Please reach out to your site admin.
             </p>
+            <br />
+            <h4 style={{ color: 'blue' }}>
+              <a href="https://tina.io/docs/errors/faq/" target="_blank" referrerPolicy="no-referrer">See our Error FAQ for common problems</a>
+            </h4>
+            
 
             <button
               style={errorButtonStyles as any}
