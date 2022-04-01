@@ -190,14 +190,14 @@ export const Footer = styled(({ light, ...styleProps }) => {
             height="30px"
           ></iframe>
           <a href="https://twitter.com/tina_cms" target="_blank">
-            <TwitterIconSvg />
+            {/* <TwitterIconSvg /> */}
           </a>
           <a
             className="github"
             href="https://github.com/tinacms/tinacms"
             target="_blank"
           >
-            <GithubIconSvg />
+            {/* <GithubIconSvg /> */}
           </a>
         </FooterSocial>
       </FooterTop>

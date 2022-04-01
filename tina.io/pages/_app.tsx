@@ -87,9 +87,9 @@ class Site extends App {
             apiURL={process.env.NEXT_PUBLIC_TINA_ENDPOINT}
             // @ts-ignore
             cmsCallback={(cms) => {
-              import('react-tinacms-editor').then(({ MarkdownFieldPlugin }) => {
-                cms.plugins.add(MarkdownFieldPlugin)
-              })
+              // import('react-tinacms-editor').then(({ MarkdownFieldPlugin }) => {
+              //   cms.plugins.add(MarkdownFieldPlugin)
+              // })
               cms.flags.set('tina-admin', true)
               cms.flags.set('rich-text-alt', true)
               cms.flags.set('branch-switcher', true)

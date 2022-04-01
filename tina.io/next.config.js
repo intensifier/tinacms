@@ -1,17 +1,16 @@
+console.log('running')
+
 const MomentLocalesPlugin = require('moment-locales-webpack-plugin')
 
 const withSvgr = require('next-svgr')
 
 require('dotenv').config()
 
-const withBundleAnalyzer = require('@next/bundle-analyzer')({
-  enabled: process.env.ANALYZE === 'true',
-})
-
 const dummyMailchimpEndpoint =
   'https://theDomainHere.us18.list-manage.com/subscribe/post?u=1512315231252&amp;id=0asd21t12e1'
 
-const config = {
+module.exports = withSvgr({
+  experimental: { esmExternals: false },
   env: {
     MAILCHIMP_ADDRESS: process.env.MAILCHIMP_ADDRESS || dummyMailchimpEndpoint,
     HUBSPOT_TEAMS_FORM_ID: process.env.HUBSPOT_TEAMS_FORM_ID,
@@ -56,6 +55,4 @@ const config = {
 
     return config
   },
-}
-
-module.exports = withBundleAnalyzer(withSvgr(config))
+})

@@ -16,7 +16,7 @@ export const TinaIcon = styled(({ docs, ...styleProps }: TinaIconProps) => {
     <Link href={link}>
       <a {...styleProps}>
         <h1>
-          <TinaIconSvg />
+          {/* <TinaIconSvg /> */}
           {docs && <span>Docs</span>}
         </h1>
       </a>

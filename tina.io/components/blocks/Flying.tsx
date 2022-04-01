@@ -41,12 +41,12 @@ export function FlyingBlock({ data, index }) {
           </div>
         </div>
         <div className="background">
-          <CloudsOne />
-          <CloudsOne />
+          {/* <CloudsOne /> */}
+          {/* <CloudsOne /> */}
         </div>
         <div className="foreground">
-          <CloudsTwo />
-          <CloudsTwo />
+          {/* <CloudsTwo /> */}
+          {/* <CloudsTwo /> */}
         </div>
       </div>
       <style jsx>{`

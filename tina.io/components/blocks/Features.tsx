@@ -2,12 +2,12 @@ import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import { actionsTemplate, Actions } from './Actions'
 import { Container } from './Container'
-import BlobOne from '../../public/svg/blob-1.svg'
-import BlobTwo from '../../public/svg/blob-2.svg'
-import BlobThree from '../../public/svg/blob-3.svg'
-import BlobFour from '../../public/svg/blob-4.svg'
-import BlobFive from '../../public/svg/blob-5.svg'
-import BlobSix from '../../public/svg/blob-6.svg'
+// import BlobOne from '../../public/svg/blob-1.svg'
+// import BlobTwo from '../../public/svg/blob-2.svg'
+// import BlobThree from '../../public/svg/blob-3.svg'
+// import BlobFour from '../../public/svg/blob-4.svg'
+// import BlobFive from '../../public/svg/blob-5.svg'
+// import BlobSix from '../../public/svg/blob-6.svg'
 import type { TinaTemplate } from '@tinacms/cli'
 
 export const featuresTemplate: TinaTemplate = {
@@ -54,12 +54,12 @@ export const featuresTemplate: TinaTemplate = {
 }
 
 const blobSvgOptions = [
-  BlobOne,
-  BlobTwo,
-  BlobThree,
-  BlobFour,
-  BlobFive,
-  BlobSix,
+  // BlobOne,
+  // BlobTwo,
+  // BlobThree,
+  // BlobFour,
+  // BlobFive,
+  // BlobSix,
 ]
 
 export function FeatureBlock({ data, index }) {
@@ -81,9 +81,7 @@ export function FeatureBlock({ data, index }) {
             </div>
           )}
           {data.actions && <Actions items={data.actions} />}
-          <div className="blob">
-            <FeatureBlobSvg />
-          </div>
+          <div className="blob">{/* <FeatureBlobSvg /> */}</div>
         </div>
         {data.media && data.media.src && (
           <div className={`featureImage`}>

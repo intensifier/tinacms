@@ -10,9 +10,7 @@ export function Navbar({}) {
       <Container width="wide">
         <div className="navGrid">
           <Link href="/">
-            <a className="navLogo">
-              <TinaLogo />
-            </a>
+            <a className="navLogo">{/* <TinaLogo /> */}</a>
           </Link>
           <nav className="navWrapper navNav">
             <ul className="navUl">

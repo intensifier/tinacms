@@ -57,7 +57,7 @@ export function HeroBlock({ data, index }) {
             data.videoSrc ? 'with-video' : 'without-video'
           }`}
         >
-          <HeroBackground />
+          {/* <HeroBackground /> */}
         </div>
       </section>
       <style jsx>{`

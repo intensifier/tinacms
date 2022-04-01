@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createRef } from 'react'
+import { useState, useEffect, createRef } from 'react'
 import {
   InstantSearch,
   Index,
@@ -16,7 +16,7 @@ import {
 } from './styles'
 import Input from './input'
 import { hitComponents } from './hitComps'
-import { Dismissible, Props as DismissibleProps } from 'react-dismissible'
+import { Dismissible, Props as DismissibleProps } from 'tinacms'
 
 const DEFAULT_ALGOLIA_APP_ID = '80HKRA52OJ'
 const DEFAULT_ALGOLIA_SEARCH_KEY = 'f13c10ad814c92b85f380deadc2db2dc'
