@@ -53,6 +53,8 @@ const useClickOutside = (ref: any, handler: any, events?: any) => {
 
 const ClientSideDismissible = (props: DismissibleProps & { children: any }) => {
   if (typeof window !== 'undefined') {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-ignore
+    // @ts-ignore
     return <Dismissible {...props}>{props.children}</Dismissible>
   }
   return props.children
@@ -83,8 +85,14 @@ export default function Search({ indices, collapse, expanded = false }: any) {
       />
       {focus && (
         <ClientSideDismissible
+          // eslint-disable-next-line @typescript-eslint/ban-ts-ignore
+          // @ts-ignore
           click // call onDismiss if clicking outside of this
+          // eslint-disable-next-line @typescript-eslint/ban-ts-ignore
+          // @ts-ignore
           escape // call onDismiss if the user presses escape
+          // eslint-disable-next-line @typescript-eslint/ban-ts-ignore
+          // @ts-ignore
           onDismiss={() => {
             setFocus(false)
           }}

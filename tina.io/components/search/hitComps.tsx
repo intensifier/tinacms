@@ -1,6 +1,8 @@
 import { Highlight, Snippet } from 'react-instantsearch-dom'
 
 import { DynamicLink } from '../ui/DynamicLink'
+// eslint-disable-next-line @typescript-eslint/ban-ts-ignore
+// @ts-ignore
 import { Hit } from 'react-instantsearch-core'
 import React from 'react'
 import { formatDate } from '../../utils'
