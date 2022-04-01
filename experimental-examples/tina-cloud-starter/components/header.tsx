@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { Container } from "./container";
 // @ts-ignore
-import TinaIconSvg from "../public/tina.svg";
+// import TinaIconSvg from "../public/tina.svg";
 import { ThemeContext } from "./theme";
 import { Icon } from "./icon";
 
