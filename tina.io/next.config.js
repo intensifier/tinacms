@@ -10,6 +10,9 @@ const dummyMailchimpEndpoint =
   'https://theDomainHere.us18.list-manage.com/subscribe/post?u=1512315231252&amp;id=0asd21t12e1'
 
 module.exports = withSvgr({
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   experimental: { esmExternals: false, externalDir: true },
   env: {
     MAILCHIMP_ADDRESS: process.env.MAILCHIMP_ADDRESS || dummyMailchimpEndpoint,

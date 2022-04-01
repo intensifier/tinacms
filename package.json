@@ -9,6 +9,7 @@
     "packages/[^@]*"
   ],
   "scripts": {
+    "install": "yarn install",
     "build": "yarn buildBuilder && yarn workspaces foreach --topological-dev --no-private run g:echo | cat > topologicalDeps.txt && yarn workspace @tinacms/scripts build:all",
     "build:e2e": "yarn build && yarn workspace kitchen-sink-starter build",
     "start:e2e": "yarn workspace kitchen-sink-starter start",
