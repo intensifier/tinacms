@@ -2,6 +2,7 @@
   "name": "root",
   "private": true,
   "workspaces": [
+    "tina.io",
     "packages/@tinacms/*",
     "examples/*",
     "experimental-examples/*",
