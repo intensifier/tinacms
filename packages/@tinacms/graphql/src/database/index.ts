@@ -573,21 +573,29 @@ export class Database {
   }
 
   public delete = async (filepath: string) => {
+    console.log('calling db delete')
+    console.log({ filepath })
+
     const tinaSchema = await this.getSchema()
     const collection = tinaSchema.schema.collections.find((collection) =>
       filepath.startsWith(collection.path)
     )
+    console.log({ collection })
+
     let collectionIndexDefinitions
     if (collection) {
       const indexDefinitions = await this.getIndexDefinitions()
+      console.log({ indexDefinitions })
       collectionIndexDefinitions = indexDefinitions?.[collection.name]
     }
+    console.log('Calling store delete')
     await this.store.delete(filepath, {
       collection: collection.name,
       indexDefinitions: collectionIndexDefinitions,
     })
-
+    console.log('Calling bridge delete')
     await this.bridge.delete(filepath)
+    console.log('finished calling db delete')
   }
 
   public _indexAllContent = async () => {
