@@ -88,6 +88,7 @@ export class TinaSchema {
         extraFields['templates'] = templateInfo.templates
         break
     }
+    console.log('Collection in getCollection', { collection })
     return {
       // @ts-ignore FIXME: backwards compatibility, using `slug` should probably be deprecated
       slug: collection.name,

@@ -398,9 +398,17 @@ export class Resolver {
       collectionLookup = Object.keys(args.params)[0]
     }
 
+    console.log('Calling this.tinaSchema.getCollections')
+
     const collectionNames = this.tinaSchema
       .getCollections()
-      .map((item) => item.name)
+      .map((item) => {
+        console.log({ item })
+        return item?.name || false
+      })
+      .filter(Boolean)
+
+    console.log('All collection names', collectionNames)
 
     assertShape<string>(
       collectionLookup,
@@ -441,8 +449,15 @@ export class Resolver {
             `Unable to delete document, ${realPath} does not exist`
           )
         }
+        console.log('it is a deletion')
         const doc = await this.getDocument(realPath)
+
+        console.log('it is a deleting doc')
+
         await this.deleteDocument(realPath)
+
+        console.log('Finished deleting doc')
+
         return doc
       }
       /**

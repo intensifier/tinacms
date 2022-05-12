@@ -140,6 +140,7 @@ export class Database {
   }
 
   public get = async <T extends object>(filepath: string): Promise<T> => {
+    console.log('Get form DB being called')
     if (SYSTEM_FILES.includes(filepath)) {
       throw new Error(`Unexpected get for config file ${filepath}`)
     } else {
@@ -173,6 +174,7 @@ export class Database {
           data[field.name] = $_body
         }
       }
+      console.log('Get form DB being finished')
       return {
         ...data,
         _collection: collection.name,

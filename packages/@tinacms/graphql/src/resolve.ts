@@ -224,6 +224,7 @@ export const resolve = async ({
                 'deleteDocument',
               ].includes(info.fieldName)
             ) {
+              console.log('resolver.resolveDocument being called')
               /**
                * `getDocument`/`createDocument`/`updateDocument`
                */
@@ -237,6 +238,7 @@ export const resolve = async ({
                 isAddPendingDocument: false,
                 isCollectionSpecific: false,
               })
+              console.log('result from resolver.resolveDocument', result)
 
               return result
             }
