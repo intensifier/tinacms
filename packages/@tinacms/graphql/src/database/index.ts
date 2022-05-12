@@ -575,14 +575,9 @@ export class Database {
   public delete = async (filepath: string) => {
     console.log('calling db delete')
     console.log({ filepath })
-    const unixFilePath = filepath.replace('\\\\', '/')
-    console.log({ unixFilePath })
 
     const tinaSchema = await this.getSchema()
-    const collection = tinaSchema.schema.collections.find((collection) => {
-      console.log({ collectionPath: collection.path })
-      return unixFilePath.startsWith(collection.path)
-    })
+    const collection = await tinaSchema.getCollectionByFullPath(filepath)
     console.log({ collection })
 
     let collectionIndexDefinitions
