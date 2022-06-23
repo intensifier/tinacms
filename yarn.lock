@@ -394,7 +394,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/helper-annotate-as-pure@npm:^7.16.0, @babel/helper-annotate-as-pure@npm:^7.16.7":
+"@babel/helper-annotate-as-pure@npm:^7.16.7":
   version: 7.16.7
   resolution: "@babel/helper-annotate-as-pure@npm:7.16.7"
   dependencies:
@@ -702,7 +702,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/helper-module-imports@npm:^7.16.0, @babel/helper-module-imports@npm:^7.16.7":
+"@babel/helper-module-imports@npm:^7.16.7":
   version: 7.16.7
   resolution: "@babel/helper-module-imports@npm:7.16.7"
   dependencies:
@@ -804,13 +804,6 @@ __metadata:
   version: 7.16.7
   resolution: "@babel/helper-plugin-utils@npm:7.16.7"
   checksum: bad83930f7e3777ef543591396c60532321e9a355c4c5ae605a072e0b8753df587aa4b8038efb40528e134ee1aeee6e03c6f1b8852a2fb2948cab4e282838ede
-  languageName: node
-  linkType: hard
-
-"@babel/helper-plugin-utils@npm:^7.17.12":
-  version: 7.17.12
-  resolution: "@babel/helper-plugin-utils@npm:7.17.12"
-  checksum: 300da74658e2b958bb488d4ca27757e676b14f9978501dfb3a2fc505d4322d58fbd4f7b79470299828f61cf880dff8fce83bbe942f0a00e0b86a8fdc21f6cc8d
   languageName: node
   linkType: hard
 
@@ -1678,17 +1671,6 @@ __metadata:
   peerDependencies:
     "@babel/core": ^7.0.0-0
   checksum: be25807f70a8209ef371f6ed8e1d6e6d97dd503114ce896d61039be9c1865fc4adae1be55885135633f35c1bd3ab2fe296dec7edea9a1d7b1d86ba8eb93a636f
-  languageName: node
-  linkType: hard
-
-"@babel/plugin-syntax-jsx@npm:^7.17.12":
-  version: 7.17.12
-  resolution: "@babel/plugin-syntax-jsx@npm:7.17.12"
-  dependencies:
-    "@babel/helper-plugin-utils": ^7.17.12
-  peerDependencies:
-    "@babel/core": ^7.0.0-0
-  checksum: a5dde0b0fc6493a4b1f0341a7b68dcfa0c1ba1553e8aa21e995320cb4267df619c7c20c0840f14f13c302f4bef4759a92cde3f69c0be1ff489dcc2835bc4de53
   languageName: node
   linkType: hard
 
@@ -6019,17 +6001,6 @@ __metadata:
     telejson: ^3.2.0
     util-deprecate: ^1.0.2
   checksum: 3cd25ee04b8e14f2e0e983c06e2daf9ada6ef261e2492a22b1ec80f3474598f2ac5261d25d12874f2fbee31722ddd91ed9f0e1446a555bf5f393c7e779daac1f
-  languageName: node
-  linkType: hard
-
-"@styled-jsx/plugin-sass@npm:^4.0.2":
-  version: 4.0.2
-  resolution: "@styled-jsx/plugin-sass@npm:4.0.2"
-  dependencies:
-    strip-indent: 3.0.0
-  peerDependencies:
-    sass: "*"
-  checksum: ff8fa972c79655fafb8654679269c41791a2fd765aaef79d670e4a55852b083b5f4b8e64d1d2948bbede5f0ba25ec6ec91370a61c8ca385673b17950a3bb22b3
   languageName: node
   linkType: hard
 
@@ -10849,21 +10820,6 @@ __metadata:
   peerDependencies:
     styled-components: ">= 2"
   checksum: 4244bf6f46dffede8af69412506bb389d47294cb3b46a4a1a446223016b7b0f273c1df7ebea4b7139510e4cecbb8017aff54fe08cb9469ea2774d61aed46e6b7
-  languageName: node
-  linkType: hard
-
-"babel-plugin-styled-components@npm:^2.0.7":
-  version: 2.0.7
-  resolution: "babel-plugin-styled-components@npm:2.0.7"
-  dependencies:
-    "@babel/helper-annotate-as-pure": ^7.16.0
-    "@babel/helper-module-imports": ^7.16.0
-    babel-plugin-syntax-jsx: ^6.18.0
-    lodash: ^4.17.11
-    picomatch: ^2.3.0
-  peerDependencies:
-    styled-components: ">= 2"
-  checksum: cf189e245fbb11b25b39712058aec069e7d739b33b74a2465e5666a1be2896486654b8bb0512ba6ea49efcff10dda4eeb6961824ee469ec910f7ba34f1362c8e
   languageName: node
   linkType: hard
 
@@ -24894,13 +24850,6 @@ fsevents@~2.1.2:
   languageName: node
   linkType: hard
 
-"picomatch@npm:^2.3.0":
-  version: 2.3.1
-  resolution: "picomatch@npm:2.3.1"
-  checksum: 5e3bbbf6a7356e1f029754112803187564a81768718393782d73b8be2c7b2055316ed200e7ca989fae7a794348afbc17da93fa760930bcbfa4ab2c8abb781587
-  languageName: node
-  linkType: hard
-
 "pify@npm:^2.2.0, pify@npm:^2.3.0":
   version: 2.3.0
   resolution: "pify@npm:2.3.0"
@@ -29298,11 +29247,8 @@ resolve@^2.0.0-next.3:
   version: 0.0.0-use.local
   resolution: "starter-basic@workspace:examples/basic"
   dependencies:
-    "@babel/plugin-syntax-jsx": ^7.17.12
-    "@styled-jsx/plugin-sass": ^4.0.2
     "@tinacms/cli": "workspace:*"
     "@types/node": ^17.0.21
-    babel-plugin-styled-components: ^2.0.7
     eslint: 7
     eslint-config-next: 12.0.3
     next: 12.0.3
@@ -29311,7 +29257,6 @@ resolve@^2.0.0-next.3:
     react-is: ^17.0.2
     styled-components: ^5.1.3
     styled-jsx: ^5.0.2
-    styled-jsx-plugin-sass: ^1.0.0
     tinacms: "workspace:*"
   languageName: unknown
   linkType: soft
@@ -29766,7 +29711,7 @@ resolve@^2.0.0-next.3:
   languageName: node
   linkType: hard
 
-"strip-indent@npm:3.0.0, strip-indent@npm:^3.0.0":
+"strip-indent@npm:^3.0.0":
   version: 3.0.0
   resolution: "strip-indent@npm:3.0.0"
   dependencies:
@@ -29850,15 +29795,6 @@ resolve@^2.0.0-next.3:
     react-dom: ">= 16.8.0"
     react-is: ">= 16.8.0"
   checksum: 1f94f92b5dab0b0a965646079604c184e9ef31fd0546881408039a5b4d9a4ebe73b6bb62b05912f06b68392352f1fed4c2dd66a74888b2446226aa0105b681c9
-  languageName: node
-  linkType: hard
-
-"styled-jsx-plugin-sass@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "styled-jsx-plugin-sass@npm:1.0.0"
-  peerDependencies:
-    node-sass: "*"
-  checksum: a1c432b054ffb61c46012e5ba89dc726d41a72567e6bc780d70d28fe1d1545d9c86a70d4eca55c1aa20fa0b7b9e4c23b0f43f5b68a96a664a3aa2539268d9f70
   languageName: node
   linkType: hard
 

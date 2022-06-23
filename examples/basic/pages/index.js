@@ -10,6 +10,38 @@ const query = `{
   }
 }`
 
+const components = {
+  CoolComponent: (props) => {
+    return (
+      <>
+        <div className="component">{props.text}</div>
+        <style jsx>{`
+          .component {
+            position: relative;
+            z-index: 10;
+            line-height: 1.1;
+            background: linear-gradient(
+              to top left,
+              var(--blue-750),
+              var(--blue-650),
+              var(--blue-550)
+            );
+            border-radius: 10px;
+            color: var(--blue-350);
+            font-weight: medium;
+            padding: 0.625em 0.875em;
+            border: 1px solid var(--blue-500);
+            box-shadow: inset 0 0 28px -8px var(--blue-350),
+              inset -2px -2px 12px -4px var(--blue-450),
+              8px 16px 32px -8px var(--blue-550);
+            font-size: 1.75rem;
+          }
+        `}</style>
+      </>
+    )
+  },
+}
+
 export default function Home(props) {
   const { data } = useTina({
     query,
@@ -24,13 +56,18 @@ export default function Home(props) {
       <Layout>
         <div className="container">
           <h2>{data.page.title}</h2>
-          <TinaMarkdown content={content} />
+          <TinaMarkdown components={components} content={content} />
         </div>
       </Layout>
       <style jsx>{`
         .container {
           padding: 32px;
           flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 2.25rem;
           width: 100%;
         }
 
@@ -54,6 +91,7 @@ export default function Home(props) {
           -webkit-background-clip: text;
           background-clip: text;
           font-size: 4.5rem;
+          margin: 0;
         }
 
         .container :global(p) {
@@ -74,28 +112,7 @@ export default function Home(props) {
           -webkit-background-clip: text;
           background-clip: text;
           font-size: 2rem;
-        }
-
-        .container .component {
-          position: relative;
-          z-index: 10;
-          line-height: 1.1;
-          background: linear-gradient(
-            to top left,
-            var(--blue-750),
-            var(--blue-650),
-            var(--blue-550)
-          );
-          border-radius: 10px;
-          color: var(--blue-350);
-          font-weight: medium;
-          padding: 0.625em 0.875em;
-          border: 1px solid var(--blue-500);
-          box-shadow: inset 0 0 28px -8px var(--blue-350),
-            inset -2px -2px 12px -4px var(--blue-450),
-            8px 16px 32px -8px var(--blue-550);
-          font-size: 1.25em;
-          margin: 1.5em 0;
+          margin: 0;
         }
       `}</style>
     </>

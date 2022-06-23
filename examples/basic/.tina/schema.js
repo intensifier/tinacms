@@ -64,6 +64,35 @@ const schema = defineSchema({
           name: 'body',
           label: 'Main Content',
           type: 'rich-text',
+          templates: [
+            {
+              name: 'CoolComponent',
+              label: 'Cool Component',
+
+              fields: [
+                {
+                  name: 'text',
+                  label: 'Callout Text',
+                  type: 'string',
+                  // options: [
+                  //   {
+                  //     value: 'movies',
+                  //     label: 'Movies',
+                  //   },
+                  //   {
+                  //     value: 'music',
+                  //     label: 'Music',
+                  //   },
+                  // ],
+                },
+              ],
+              ui: {
+                defaultItem: {
+                  text: 'MDX Rocks!',
+                },
+              },
+            },
+          ],
           isBody: true,
         },
       ],

@@ -138,7 +138,7 @@ export const FormBuilder: FC<FormBuilderProps> = ({
                 </FormWrapper>
               </FormPortalProvider>
               {!hideFooter && (
-                <div className="relative flex-none w-full h-16 px-6 bg-white border-t border-gray-100	flex items-center justify-center">
+                <div className="relative flex-none w-full h-18 px-5 bg-white border-t border-gray-100	flex items-center justify-center">
                   <div className="flex-1 w-full flex justify-between gap-4 items-center max-w-form">
                     {/* {tinaForm.reset && (
                       <ResetForm
