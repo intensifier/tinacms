@@ -39,7 +39,7 @@ import { useWindowWidth } from '@react-hook/window-size'
 export const SidebarContext = React.createContext<any>(null)
 
 export const minPreviewWidth = 440
-export const minSidebarWidth = 360
+export const minSidebarWidth = 300
 export const navBreakpoint = 1000
 
 const LOCALSTATEKEY = 'tina.sidebarState'
@@ -273,34 +273,7 @@ const Sidebar = ({
     >
       <>
         <SidebarWrapper>
-          <EditButton />
-          {displayNav && (
-            <Nav
-              showCollections={isTinaAdminEnabled}
-              collectionsInfo={collectionsInfo}
-              screens={allScreens}
-              contentCreators={contentCreators}
-              sidebarWidth={sidebarWidth}
-              RenderNavSite={({ view }) => (
-                <SidebarSiteLink
-                  view={view}
-                  onClick={() => {
-                    setActiveView(view)
-                    setMenuIsOpen(false)
-                  }}
-                />
-              )}
-              RenderNavCollection={({ collection }) => (
-                <SidebarCollectionLink collection={collection} />
-              )}
-            />
-          )}
           <SidebarBody>
-            <SidebarHeader
-              displayNav={displayNav}
-              renderNav={renderNav}
-              isLocalMode={cms.api?.tina?.isLocalMode}
-            />
             <FormsView>
               <sidebar.placeholder />
             </FormsView>
@@ -548,7 +521,7 @@ const SidebarWrapper = ({ children }) => {
           width: displayState === 'fullscreen' ? '100vw' : sidebarWidth + 'px',
           maxWidth:
             displayState === 'fullscreen' ? '100vw' : 'calc(100vw - 8px)',
-          minWidth: '360px',
+          // minWidth: '360px',
         }}
       >
         {children}

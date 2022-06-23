@@ -40,7 +40,7 @@ const schema = defineSchema({
       fields: [
         {
           label: 'Title',
-          name: 'Title',
+          name: 'title',
           type: 'string',
           ui: {
             // defaultValue: 'Title',

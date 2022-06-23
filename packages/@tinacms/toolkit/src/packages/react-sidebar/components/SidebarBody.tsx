@@ -269,6 +269,8 @@ export const FormHeader = ({ renderNav, activeForm }: FormHeaderProps) => {
     ? activeForm.label.replace(/^.*[\\\/]/, '')
     : false
 
+  return null
+
   return (
     <div
       className={`py-4 border-b border-gray-200 bg-white ${headerPadding[navState]}`}

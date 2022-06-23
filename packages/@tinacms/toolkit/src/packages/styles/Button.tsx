@@ -63,8 +63,8 @@ export const Button = ({
     right: `rounded-r-full`,
   }
   const sizeClasses = {
-    small: `text-xs h-8 px-3`,
-    medium: `text-sm h-10 px-4`,
+    small: `text-sm h-8 px-3`,
+    medium: `text-md h-10 px-4`,
     custom: ``,
   }
 

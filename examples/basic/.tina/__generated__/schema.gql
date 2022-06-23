@@ -109,7 +109,7 @@ type TestConnection implements Connection {
 }
 
 type Page implements Node & Document {
-  Title: String
+  title: String
   body: JSON
   id: ID!
   _sys: SystemInfo!
@@ -193,7 +193,7 @@ input TestMutation {
 }
 
 input PageMutation {
-  Title: String
+  title: String
   body: JSON
 }
 

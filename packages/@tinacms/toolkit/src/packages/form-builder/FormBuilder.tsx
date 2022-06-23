@@ -140,7 +140,7 @@ export const FormBuilder: FC<FormBuilderProps> = ({
               {!hideFooter && (
                 <div className="relative flex-none w-full h-16 px-6 bg-white border-t border-gray-100	flex items-center justify-center">
                   <div className="flex-1 w-full flex justify-between gap-4 items-center max-w-form">
-                    {tinaForm.reset && (
+                    {/* {tinaForm.reset && (
                       <ResetForm
                         pristine={pristine}
                         reset={async () => {
@@ -152,7 +152,7 @@ export const FormBuilder: FC<FormBuilderProps> = ({
                       >
                         {tinaForm.buttons.reset}
                       </ResetForm>
-                    )}
+                    )} */}
                     <Button
                       onClick={() => handleSubmit()}
                       disabled={pristine || submitting || invalid}

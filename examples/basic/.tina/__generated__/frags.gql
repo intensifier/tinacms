@@ -8,7 +8,7 @@ fragment TestParts on Test {
 }
 
 fragment PageParts on Page {
-  Title
+  title
   body
 }
 

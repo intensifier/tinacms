@@ -116,7 +116,7 @@ export const FieldLabel = ({
   return (
     <label
       htmlFor={name}
-      className={`block font-sans text-xs font-semibold text-gray-700 whitespace-normal mb-2 ${className}`}
+      className={`block font-sans text-sm font-semibold text-gray-700 whitespace-normal mb-2 ${className}`}
       {...props}
     >
       {children}
