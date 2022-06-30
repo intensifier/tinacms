@@ -35,8 +35,7 @@ import ini from 'ini'
 import os from 'os'
 import path from 'path'
 
-const buildLock = new AsyncLock()
-const reBuildLock = new AsyncLock()
+const lock = new AsyncLock()
 interface Options {
   port?: number
   command?: string
@@ -145,8 +144,7 @@ export async function startServer(
     dev,
   }: Options
 ) {
-  buildLock.disable()
-  reBuildLock.disable()
+  lock.disable()
 
   const rootPath = process.cwd()
   const t = new Telemetry({ disabled: Boolean(noTelemetry) })
@@ -197,9 +195,9 @@ export async function startServer(
     // Clear the cache of the DB passed to the GQL server
     database.clearCache()
     // Wait for the lock to be disabled
-    await buildLock.promise
+    await lock.promise
     // Enable the lock so that no two builds can happen at once
-    buildLock.enable()
+    lock.enable()
     try {
       if (!process.env.CI && !noWatch) {
         await store.close()
@@ -218,7 +216,7 @@ export async function startServer(
       throw error
     } finally {
       // Disable the lock so a new build can run
-      buildLock.disable()
+      lock.disable()
     }
   }
 
@@ -255,16 +253,10 @@ export async function startServer(
       })
       .on('all', async () => {
         if (ready) {
-          await reBuildLock.promise
-          // hold the rebuild lock
-          reBuildLock.enable()
           logger.info('Tina change detected, regenerating config')
           try {
             if (shouldBuild) {
               await build(noSDK)
-            }
-            if (isReady) {
-              await restart()
             }
           } catch (e) {
             handleServerErrors(e)
@@ -274,8 +266,6 @@ export async function startServer(
                 errorMessage: e.message,
               },
             })
-          } finally {
-            reBuildLock.disable()
           }
         }
       })
@@ -294,61 +284,47 @@ export async function startServer(
 
   const start = async () => {
     // we do not want to start the server while the schema is building
-    await buildLock.promise
+    await lock.promise
+    const s = require('./server')
+    state.server = await s.default(database)
 
-    // hold the lock
-    buildLock.enable()
-    try {
-      const s = require('./server')
-      state.server = await s.default(database)
-
-      state.server.listen(port, () => {
-        const altairUrl = `http://localhost:${port}/altair/`
-        const cmsUrl = `[your-development-url]/admin`
-        if (verbose)
-          logger.info(`Started Filesystem GraphQL server on port: ${port}`)
-        logger.info(
-          `Visit the GraphQL playground at ${chalk.underline.blueBright(
-            altairUrl
-          )}\nor`
-        )
-        logger.info(`Enter the CMS at ${chalk.underline.blueBright(cmsUrl)} \n`)
-      })
-      state.server.on('error', function (e) {
-        if (e.code === 'EADDRINUSE') {
-          logger.error(dangerText(`Port 4001 already in use`))
-          process.exit()
-        }
-        throw e
-      })
-      state.server.on('connection', (socket) => {
-        state.sockets.push(socket)
-      })
-    } catch (error) {
-      throw error
-    } finally {
-      // let go of the lock
-      buildLock.disable()
-    }
+    state.server.listen(port, () => {
+      const altairUrl = `http://localhost:${port}/altair/`
+      const cmsUrl = `[your-development-url]/admin`
+      if (verbose)
+        logger.info(`Started Filesystem GraphQL server on port: ${port}`)
+      logger.info(
+        `Visit the GraphQL playground at ${chalk.underline.blueBright(
+          altairUrl
+        )}\nor`
+      )
+      logger.info(`Enter the CMS at ${chalk.underline.blueBright(cmsUrl)} \n`)
+    })
+    state.server.on('error', function (e) {
+      if (e.code === 'EADDRINUSE') {
+        logger.error(dangerText(`Port 4001 already in use`))
+        process.exit()
+      }
+      throw e
+    })
+    state.server.on('connection', (socket) => {
+      state.sockets.push(socket)
+    })
   }
 
   const restart = async () => {
-    return new Promise((resolve, reject) => {
-      logger.info('restarting local server...')
-      delete require.cache[gqlPackageFile]
+    logger.info('restarting local server...')
+    delete require.cache[gqlPackageFile]
 
-      state.sockets.forEach((socket) => {
-        if (socket.destroyed === false) {
-          socket.destroy()
-        }
-      })
-      state.sockets = []
-      state.server.close(async () => {
-        logger.info('Server closed')
-        start()
-          .then((x) => resolve(x))
-          .catch((err) => reject(err))
-      })
+    state.sockets.forEach((socket) => {
+      if (socket.destroyed === false) {
+        socket.destroy()
+      }
+    })
+    state.sockets = []
+    state.server.close(() => {
+      logger.info('Server closed')
+      start()
     })
   }
 
@@ -360,16 +336,8 @@ export async function startServer(
         start()
       })
       .on('all', async () => {
-        await reBuildLock.promise
-        reBuildLock.enable()
-        try {
-          if (isReady) {
-            await restart()
-          }
-        } catch (error) {
-          throw error
-        } finally {
-          reBuildLock.disable()
+        if (isReady) {
+          restart()
         }
       })
   } else {
