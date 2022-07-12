@@ -525,11 +525,14 @@ export class Database {
   }
 
   private async indexStatusCallbackWrapper(fn: () => Promise<void>) {
+    console.log('callback - inprogress')
     await this.indexStatusCallback({ status: 'inprogress' })
     try {
       await fn()
+      console.log('callback - complete')
       await this.indexStatusCallback({ status: 'complete' })
     } catch (error) {
+      console.log('callback - failed')
       await this.indexStatusCallback({ status: 'failed', error })
       throw error
     }
@@ -542,6 +545,7 @@ export class Database {
     graphQLSchema: DocumentNode
     tinaSchema: TinaSchema
   }) => {
+    console.log('indexContent')
     await this.indexStatusCallbackWrapper(async () => {
       const lookup = JSON.parse(
         await this.bridge.get(
@@ -572,6 +576,7 @@ export class Database {
   }
 
   public deleteContentByPaths = async (documentPaths: string[]) => {
+    console.log('deleteContentByPaths')
     await this.indexStatusCallbackWrapper(async () => {
       const { pathsByCollection, nonCollectionPaths, collections } =
         await this.partitionPathsByCollection(documentPaths)
@@ -589,6 +594,7 @@ export class Database {
   }
 
   public indexContentByPaths = async (documentPaths: string[]) => {
+    console.log('indexContentByPaths')
     await this.indexStatusCallbackWrapper(async () => {
       const { pathsByCollection, nonCollectionPaths, collections } =
         await this.partitionPathsByCollection(documentPaths)
