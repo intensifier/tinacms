@@ -1,5 +1,37 @@
 # tina-graphql
 
+## 0.61.8
+
+### Patch Changes
+
+- a7dcb8d44: Generated client now resolves references. The default depth is 5 and can be modified in the `config` section of `defineSchema`.
+
+  EX
+
+  ```ts
+  const schema = defineSchema({
+    config: {
+      client: {
+        referenceDepth: 3,
+      },
+    },
+    // ...
+  })
+  ```
+
+  To get the old behavior set referenceDepth to `1`.
+
+  ```ts
+  const schema = defineSchema({
+    config: {
+      client: {
+        referenceDepth: 1,
+      },
+    },
+    // ...
+  })
+  ```
+
 ## 0.61.3
 
 ### Patch Changes

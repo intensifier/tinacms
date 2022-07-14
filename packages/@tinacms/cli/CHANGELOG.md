@@ -1,5 +1,13 @@
 # tinacms-cli
 
+## 0.60.29
+
+### Patch Changes
+
+- 4360ef284: Minor bug fixes with tina init command in the CLI
+- Updated dependencies [a7dcb8d44]
+  - @tinacms/graphql@0.61.8
+
 ## 0.60.28
 
 ### Patch Changes

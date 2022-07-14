@@ -1,5 +1,13 @@
 # tinacms
 
+## 0.68.14
+
+### Patch Changes
+
+- 7334ec5be: Client now throws an error when a non 200 status code is returned.
+- Updated dependencies [090a5b995]
+  - @tinacms/toolkit@0.56.36
+
 ## 0.68.13
 
 ### Patch Changes
