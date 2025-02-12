@@ -1,42 +1,33 @@
 /**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+
 */
 
 import {
-  FieldDefinitionNode,
-  ScalarTypeDefinitionNode,
-  InputValueDefinitionNode,
-  ObjectTypeDefinitionNode,
-  InterfaceTypeDefinitionNode,
-  NamedTypeNode,
-  UnionTypeDefinitionNode,
-  TypeDefinitionNode,
-  DirectiveNode,
-  EnumTypeDefinitionNode,
-  InputObjectTypeDefinitionNode,
-  DocumentNode,
-  FragmentDefinitionNode,
-  SelectionNode,
+  type FieldDefinitionNode,
+  type ScalarTypeDefinitionNode,
+  type InputValueDefinitionNode,
+  type ObjectTypeDefinitionNode,
+  type InterfaceTypeDefinitionNode,
+  type NamedTypeNode,
+  type UnionTypeDefinitionNode,
+  type TypeDefinitionNode,
+  type DirectiveNode,
+  type EnumTypeDefinitionNode,
+  type InputObjectTypeDefinitionNode,
+  type DocumentNode,
+  type FragmentDefinitionNode,
+  type SelectionNode,
   SelectionSetNode,
-  FieldNode,
-  InlineFragmentNode,
-  OperationDefinitionNode,
-  VariableDefinitionNode,
-  ArgumentNode,
+  type FieldNode,
+  type InlineFragmentNode,
+  type OperationDefinitionNode,
+  type VariableDefinitionNode,
+  type ArgumentNode,
 } from 'graphql'
-import _ from 'lodash'
-import { lastItem } from '../util'
+import { flattenDeep, lastItem } from '../util'
+import uniqBy from 'lodash.uniqby'
 
-const SysFieldDefinition = {
+export const SysFieldDefinition = {
   kind: 'Field' as const,
   name: {
     kind: 'Name' as const,
@@ -70,6 +61,15 @@ const SysFieldDefinition = {
         name: {
           kind: 'Name' as const,
           value: 'basename',
+        },
+        arguments: [],
+        directives: [],
+      },
+      {
+        kind: 'Field' as const,
+        name: {
+          kind: 'Name' as const,
+          value: 'hasReferences',
         },
         arguments: [],
         directives: [],
@@ -536,7 +536,9 @@ export const astBuilder = {
     },
     MultiCollectionDocument: 'DocumentNode',
     CollectionDocumentUnion: 'DocumentUnion',
+    Folder: 'Folder',
     String: 'String',
+    Password: 'Password',
     Reference: 'Reference',
     Collection: 'Collection',
     ID: 'ID',
@@ -960,6 +962,15 @@ export const astBuilder = {
                         kind: 'Field',
                         name: {
                           kind: 'Name',
+                          value: 'cursor',
+                        },
+                        arguments: [],
+                        directives: [],
+                      },
+                      {
+                        kind: 'Field',
+                        name: {
+                          kind: 'Name',
                           value: 'node',
                         },
                         arguments: [],
@@ -1019,7 +1030,7 @@ export const astBuilder = {
     query: TypeDefinitionNode
     definitions: TypeDefinitionNode[]
   }): DocumentNode => {
-    const definitions = _.uniqBy(
+    const definitions = uniqBy(
       [
         ...extractInlineTypes(ast.query),
         ...extractInlineTypes(ast.globalTemplates),
@@ -1056,29 +1067,28 @@ export const extractInlineTypes = (
     const accumulator: TypeDefinitionNode[] = item.map((i) => {
       return extractInlineTypes(i)
     })
-    return _.flattenDeep(accumulator)
-  } else {
-    const accumulator: TypeDefinitionNode[] = [item]
-    // @ts-ignore
-    for (const node of walk(item)) {
-      if (node.kind === 'UnionTypeDefinition') {
-        // @ts-ignore
-        node.types = _.uniqBy(node.types, (type) => type.name.value)
-      }
+    return flattenDeep(accumulator)
+  }
+  const accumulator: TypeDefinitionNode[] = [item]
+  // @ts-ignore
+  for (const node of walk(item)) {
+    if (node.kind === 'UnionTypeDefinition') {
       // @ts-ignore
-      if (node.kind === 'NamedType') {
+      node.types = uniqBy(node.types, (type) => type.name.value)
+    }
+    // @ts-ignore
+    if (node.kind === 'NamedType') {
+      // @ts-ignore
+      if (typeof node.name.value !== 'string') {
         // @ts-ignore
-        if (typeof node.name.value !== 'string') {
-          // @ts-ignore
-          accumulator.push(node.name.value)
-          // @ts-ignore
-          node.name.value = node.name.value.name.value
-        }
+        accumulator.push(node.name.value)
+        // @ts-ignore
+        node.name.value = node.name.value.name.value
       }
     }
-
-    return accumulator
   }
+
+  return accumulator
 }
 
 export function* walk(
@@ -1110,54 +1120,6 @@ export function* walk(
   visited.add(maybeNode)
 }
 
-export function addNamespaceToSchema<T extends object | string>(
-  maybeNode: T,
-  namespace: string[] = []
-): T {
-  if (typeof maybeNode === 'string') {
-    return maybeNode
-  }
-  if (typeof maybeNode === 'boolean') {
-    return maybeNode
-  }
-
-  // @ts-ignore
-  const newNode: {
-    [key in keyof T]: (T & { namespace?: string[] }) | string
-  } = maybeNode
-  // Traverse node's properties first
-  const keys = Object.keys(maybeNode)
-  Object.values(maybeNode).map((m, index) => {
-    const key = keys[index]
-    if (Array.isArray(m)) {
-      // @ts-ignore
-      newNode[key] = m.map((element) => {
-        if (!element) {
-          return
-        }
-        if (!element.hasOwnProperty('name')) {
-          return element
-        }
-        const value = element.name || element.value // options field accepts an object with `value`  instead of `name`
-        return addNamespaceToSchema(element, [...namespace, value])
-      })
-    } else {
-      if (!m) {
-        return
-      }
-      if (!m.hasOwnProperty('name')) {
-        // @ts-ignore
-        newNode[key] = m
-      } else {
-        // @ts-ignore
-        newNode[key] = addNamespaceToSchema(m, [...namespace, m.name])
-      }
-    }
-  })
-  // @ts-ignore
-  return { ...newNode, namespace: namespace }
-}
-
 const generateNamespacedFieldName = (names: string[], suffix: string = '') => {
   return (suffix ? [...names, suffix] : names).map(capitalize).join('')
 }
@@ -1174,6 +1136,9 @@ export const NAMER = {
   },
   dataMutationTypeName: (namespace: string[]) => {
     return generateNamespacedFieldName(namespace, 'Mutation')
+  },
+  dataMutationUpdateTypeName: (namespace: string[]) => {
+    return generateNamespacedFieldName(namespace, 'UpdateMutation')
   },
   updateName: (namespace: string[]) => {
     return `update${generateNamespacedFieldName(namespace)}`

@@ -1,35 +1,21 @@
 /**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+
 */
 
-import {
-  graphql,
-  buildASTSchema,
-  getNamedType,
-  print,
-  GraphQLError,
-  parse,
-} from 'graphql'
+import { graphql, buildASTSchema, getNamedType, GraphQLError } from 'graphql'
 import type { TinaSchema } from '@tinacms/schema-tools'
-import { createSchema } from './schema'
+import type { GraphQLConfig } from './types'
+import { createSchema } from './schema/createSchema'
 import { createResolver } from './resolver'
-import { assertShape } from './util'
-import { optimizeDocuments } from '@graphql-tools/relay-operation-optimizer'
+import { assertShape, get } from './util'
+import set from 'lodash.set'
 
 import type { GraphQLResolveInfo } from 'graphql'
 import type { Database } from './database'
 import { NAMER } from './ast-builder'
-import type { GraphQLConfig } from './types'
 import { handleFetchErrorError } from './resolver/error'
+import { checkPasswordHash, mapUserFields } from './auth/utils'
+import { NotFoundError } from './error'
 
 export const resolve = async ({
   config,
@@ -39,6 +25,7 @@ export const resolve = async ({
   silenceErrors,
   verbose,
   isAudit,
+  ctxUser,
 }: {
   config?: GraphQLConfig
   query: string
@@ -47,10 +34,14 @@ export const resolve = async ({
   silenceErrors?: boolean
   verbose?: boolean
   isAudit?: boolean
+  ctxUser?: { sub: string }
 }) => {
   try {
     const verboseValue = verbose ?? true
     const graphQLSchemaAst = await database.getGraphQLSchema()
+    if (!graphQLSchemaAst) {
+      throw new GraphQLError('GraphQL schema not found')
+    }
     const graphQLSchema = buildASTSchema(graphQLSchemaAst)
 
     const tinaConfig = await database.getTinaSchema()
@@ -61,7 +52,7 @@ export const resolve = async ({
       // @ts-ignore
       flags: tinaConfig?.meta?.flags,
     })) as unknown as TinaSchema
-    const resolver = await createResolver({
+    const resolver = createResolver({
       config,
       database,
       tinaSchema,
@@ -82,9 +73,8 @@ export const resolve = async ({
         const lookup = await database.getLookup(namedType)
         if (lookup.resolveType === 'unionData') {
           return lookup.typeMap[source._template]
-        } else {
-          throw new Error(`Unable to find lookup key for ${namedType}`)
         }
+        throw new Error(`Unable to find lookup key for ${namedType}`)
       },
       fieldResolver: async (
         source: { [key: string]: undefined | Record<string, unknown> } = {},
@@ -171,23 +161,147 @@ export const resolve = async ({
            */
           if (info.fieldName === 'getOptimizedQuery') {
             try {
-              const [optimizedQuery] = optimizeDocuments(
-                info.schema,
-                [parse(args.queryString)],
-                {
-                  assumeValid: true,
-                  // Include actually means to keep them as part of the document.
-                  // We want to merge them into the query so there's a single top-level node
-                  includeFragments: false,
-                  noLocation: true,
-                }
-              )
-              return print(optimizedQuery)
+              // Deprecated
+              return args.queryString
             } catch (e) {
               throw new Error(
                 `Invalid query provided, Error message: ${e.message}`
               )
             }
+          }
+
+          if (
+            info.fieldName === 'authenticate' ||
+            info.fieldName === 'authorize'
+          ) {
+            const sub = args.sub || ctxUser?.sub
+            const collection = tinaSchema
+              .getCollections()
+              .find((c) => c.isAuthCollection)
+            if (!collection) {
+              throw new Error('Auth collection not found')
+            }
+
+            const userFields = mapUserFields(collection, ['_rawData'])
+            if (!userFields.length) {
+              throw new Error(
+                `No user field found in collection ${collection.name}`
+              )
+            }
+            if (userFields.length > 1) {
+              throw new Error(
+                `Multiple user fields found in collection ${collection.name}`
+              )
+            }
+            const userField = userFields[0]
+
+            const realPath = `${collection.path}/index.json`
+            const userDoc = await resolver.getDocument(realPath)
+            const users = get(userDoc, userField.path)
+            if (!users) {
+              throw new Error('No users found')
+            }
+            const { idFieldName, passwordFieldName } = userField
+            if (!idFieldName) {
+              throw new Error('No uid field found on user field')
+            }
+            const user = users.find((u) => u[idFieldName] === sub)
+            if (!user) {
+              return null
+            }
+
+            if (info.fieldName === 'authenticate') {
+              const saltedHash = get(user, [passwordFieldName || '', 'value'])
+              if (!saltedHash) {
+                throw new Error('No password field found on user field')
+              }
+
+              const matches = await checkPasswordHash({
+                saltedHash,
+                password: args.password,
+              })
+
+              if (matches) {
+                return user
+              }
+              return null
+            }
+            return user
+          }
+
+          if (info.fieldName === 'updatePassword') {
+            if (!ctxUser?.sub) {
+              throw new Error('Not authorized')
+            }
+
+            if (!args.password) {
+              throw new Error('No password provided')
+            }
+
+            const collection = tinaSchema
+              .getCollections()
+              .find((c) => c.isAuthCollection)
+            if (!collection) {
+              throw new Error('Auth collection not found')
+            }
+
+            const userFields = mapUserFields(collection, ['_rawData'])
+            if (!userFields.length) {
+              throw new Error(
+                `No user field found in collection ${collection.name}`
+              )
+            }
+            if (userFields.length > 1) {
+              throw new Error(
+                `Multiple user fields found in collection ${collection.name}`
+              )
+            }
+            const userField = userFields[0]
+            const realPath = `${collection.path}/index.json`
+            const userDoc = await resolver.getDocument(realPath)
+            const users = get(userDoc, userField.path)
+            if (!users) {
+              throw new Error('No users found')
+            }
+            const { idFieldName, passwordFieldName } = userField
+            const user = users.find((u) => u[idFieldName] === ctxUser.sub)
+            if (!user) {
+              throw new Error('Not authorized')
+            }
+
+            user[passwordFieldName] = {
+              value: args.password,
+              passwordChangeRequired: false,
+            }
+
+            const params = {}
+            set(
+              params,
+              userField.path.slice(1), // remove _rawData from users path
+              users.map((u) => {
+                if (user[idFieldName] === u[idFieldName]) {
+                  return user
+                }
+                return {
+                  // don't overwrite other users' passwords
+                  ...u,
+                  [passwordFieldName]: {
+                    ...u[passwordFieldName],
+                    value: '',
+                  },
+                }
+              })
+            )
+
+            await resolver.updateResolveDocument({
+              collection,
+              args: { params },
+              realPath,
+              isCollectionSpecific: true,
+              isAddPendingDocument: false,
+            })
+
+            return true
           }
 
           // We assume the value is already fully resolved
@@ -212,17 +326,13 @@ export const resolve = async ({
               )
               return resolver.getDocument(args.id)
             case 'multiCollectionDocument':
-              if (typeof value === 'string') {
+              if (typeof value === 'string' && value !== '') {
                 /**
                  * This is a reference value (`director: /path/to/george.md`)
                  */
                 return resolver.getDocument(value)
               }
-              if (
-                args &&
-                args.collection &&
-                info.fieldName === 'addPendingDocument'
-              ) {
+              if (args?.collection && info.fieldName === 'addPendingDocument') {
                 /**
                  * `addPendingDocument`
                  * FIXME: this should probably be it's own lookup
@@ -241,10 +351,11 @@ export const resolve = async ({
                   'createDocument',
                   'updateDocument',
                   'deleteDocument',
+                  'createFolder',
                 ].includes(info.fieldName)
               ) {
                 /**
-                 * `getDocument`/`createDocument`/`updateDocument`
+                 * `getDocument`/`createDocument`/`updateDocument`/`deleteDocument`/`createFolder`
                  */
                 const result = await resolver.resolveDocument({
                   args,
@@ -253,6 +364,8 @@ export const resolve = async ({
                   isCreation,
                   // Right now this is the only case for deletion
                   isDeletion: info.fieldName === 'deleteDocument',
+                  isFolderCreation: info.fieldName === 'createFolder',
+                  isUpdateName: Boolean(args?.params?.relativePath),
                   isAddPendingDocument: false,
                   isCollectionSpecific: false,
                 })
@@ -271,24 +384,46 @@ export const resolve = async ({
                     return { node: document }
                   }),
                 }
-                // TODO when jeffs back: Look at this to make sure its OK to do this. (I am pretty sure it is -- Logan)
-                // Fixes https://github.com/tinacms/tinacms/issues/2886
-              } else if (
+              }
+              if (
                 info.fieldName === 'documents' &&
                 value?.collection &&
                 value?.hasDocuments
               ) {
-                // use the collecion and hasDocuments to resolve the documents
+                let filter = args.filter
+
+                // When querying for documents, filter has shape filter { [collectionName]: { ... }} but we need to pass the filter directly to the resolver
+                if (
+                  // 1. Make sure that the filter exists
+                  typeof args?.filter !== 'undefined' &&
+                  args?.filter !== null &&
+                  // 2. Make sure that the collection name exists
+                  // @ts-ignore
+                  typeof value?.collection?.name === 'string' &&
+                  // 3. Make sure that the collection name is in the filter and is not undefined
+                  // @ts-ignore
+                  Object.keys(args.filter).includes(value?.collection?.name) &&
+                  // @ts-ignore
+                  typeof args.filter[value?.collection?.name] !== 'undefined'
+                ) {
+                  // Since 1. 2. and 3. are true, we can safely assume that the filter exists and is not undefined
+
+                  // @ts-ignore
+                  filter = args.filter[value.collection.name]
+                }
+                // use the collection and hasDocuments to resolve the documents
                 return resolver.resolveCollectionConnection({
-                  args,
+                  args: {
+                    ...args,
+                    filter,
+                  },
                   // @ts-ignore
                   collection: value.collection,
                 })
-              } else {
-                throw new Error(
-                  `Expected an array for result of ${info.fieldName} at ${info.path}`
-                )
               }
+              throw new Error(
+                `Expected an array for result of ${info.fieldName} at ${info.path}`
+              )
             /**
              * Collections-specific getter
              * eg. `getPostDocument`/`createPostDocument`/`updatePostDocument`
@@ -296,7 +431,7 @@ export const resolve = async ({
              * if coming from a query result
              * the field will be `node`
              */
-            case 'collectionDocument':
+            case 'collectionDocument': {
               if (value) {
                 return value
               }
@@ -311,6 +446,7 @@ export const resolve = async ({
                   isCollectionSpecific: true,
                 }))
               return result
+            }
             /**
              * Collections-specific list getter
              * eg. `getPageList`
@@ -358,7 +494,7 @@ export const resolve = async ({
               return value
             default:
               console.error(lookup)
-              throw new Error(`Unexpected resolve type`)
+              throw new Error('Unexpected resolve type')
           }
         } catch (e) {
           handleFetchErrorError(e, verboseValue)
@@ -369,12 +505,16 @@ export const resolve = async ({
     if (res.errors) {
       if (!silenceErrors) {
         res.errors.map((e) => {
-          console.error(e.toString())
+          if (e instanceof NotFoundError) {
+            // do nothing
+          } else {
+            console.error(e.toString())
 
-          if (verboseValue) {
-            console.error('More error context below')
-            console.error(e.message)
-            console.error(e)
+            if (verboseValue) {
+              console.error('More error context below')
+              console.error(e.message)
+              console.error(e)
+            }
           }
         })
       }
@@ -388,8 +528,7 @@ export const resolve = async ({
       return {
         errors: [e],
       }
-    } else {
-      throw e
     }
+    throw e
   }
 }

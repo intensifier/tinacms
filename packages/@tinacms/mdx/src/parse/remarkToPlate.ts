@@ -1,27 +1,18 @@
 /**
 
-Copyright 2021 Forestry.io Holdings, Inc.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 
 */
 
-import { flatten } from 'lodash-es'
-import { mdxJsxElement } from './mdx'
+import flatten from 'lodash.flatten'
+import { directiveElement, mdxJsxElement as mdxJsxElementDefault } from './mdx'
 import type * as Md from 'mdast'
 import type * as Plate from './plate'
-import type { RichTypeInner } from '@tinacms/schema-tools'
+import type { RichTextType } from '@tinacms/schema-tools'
 import type { MdxJsxTextElement, MdxJsxFlowElement } from 'mdast-util-mdx-jsx'
+import type { ContainerDirective } from 'mdast-util-directive'
+
+export type { Position, PositionItem } from './plate'
 
 declare module 'mdast' {
   interface StaticPhrasingContentMap {
@@ -40,12 +31,46 @@ declare module 'mdast' {
 }
 
 export const remarkToSlate = (
-  root: Md.Root | MdxJsxFlowElement | MdxJsxTextElement,
-  field: RichTypeInner,
-  imageCallback: (url: string) => string
+  root: Md.Root | MdxJsxFlowElement | MdxJsxTextElement | ContainerDirective,
+  field: RichTextType,
+  imageCallback: (url: string) => string,
+  raw?: string,
+  skipMDXProcess?: boolean
 ): Plate.RootElement => {
+  const mdxJsxElement = skipMDXProcess
+    ? (node: any) => node
+    : mdxJsxElementDefault
+
   const content = (content: Md.Content): Plate.BlockElement => {
     switch (content.type) {
+      case 'table': {
+        return {
+          type: 'table',
+          children: content.children.map((tableRow) => {
+            return {
+              type: 'tr',
+              children: tableRow.children.map((tableCell) => {
+                return {
+                  type: 'td',
+                  children: [
+                    {
+                      type: 'p',
+                      children: flatten(
+                        tableCell.children.map((child) =>
+                          phrasingContent(child)
+                        )
+                      ),
+                    },
+                  ],
+                }
+              }),
+            }
+          }),
+          props: {
+            align: content.align?.filter((item) => !!item),
+          },
+        }
+      }
       case 'blockquote':
         const children: Plate.InlineElement[] = []
         content.children.map((child) => {
@@ -61,7 +86,7 @@ export const remarkToSlate = (
       case 'heading':
         return heading(content)
       case 'code':
-        return code(content)
+        return parseCode(content)
       case 'paragraph':
         return paragraph(content)
       case 'mdxJsxFlowElement':
@@ -98,6 +123,12 @@ export const remarkToSlate = (
           // @ts-ignore
           content.position
         )
+      case 'leafDirective': {
+        return directiveElement(content, field, imageCallback, raw)
+      }
+      case 'containerDirective': {
+        return directiveElement(content, field, imageCallback, raw)
+      }
       default:
         throw new RichTextParseError(
           `Content: ${content.type} is not yet supported`,
@@ -107,6 +138,8 @@ export const remarkToSlate = (
     }
   }
 
+  // Treating HTML as paragraphs so they remain editable
+  // This is only really used for non-MDX contexts
   const html = (content: Md.HTML): Plate.HTMLElement => {
     return {
       type: 'html',
@@ -115,6 +148,8 @@ export const remarkToSlate = (
     }
   }
 
+  // Treating HTML as text nodes so they remain editable
+  // This is only really used for non-MDX contexts
   const html_inline = (content: Md.HTML): Plate.HTMLInlineElement => {
     return {
       type: 'html_inline',
@@ -145,6 +180,7 @@ export const remarkToSlate = (
 
     return {
       type: 'li',
+      // @ts-ignore
       children: content.children.map((child) => {
         switch (child.type) {
           case 'list':
@@ -175,20 +211,42 @@ export const remarkToSlate = (
                 ),
               ],
             }
+          case 'html':
+            return {
+              type: 'lic',
+              children: html_inline(child),
+            }
+
+          /**
+           * This wouldn't be supported right now, but since formatting
+           * under a list item can get scooped up incorrectly, we support it
+           *
+           * ```
+           * - my list item
+           *
+           *   {{% my-shortcode %}}
+           */
+          case 'leafDirective': {
+            return {
+              type: 'lic',
+              children: [directiveElement(child, field, imageCallback)],
+            }
+          }
           case 'code':
           case 'thematicBreak':
           case 'table':
-          case 'html':
             throw new RichTextParseError(
               `${child.type} inside list item is not supported`,
               child.position
             )
           default:
+            let position: Plate.Position | undefined
+            if (child.type !== 'containerDirective') {
+              position = child.position
+            }
             throw new RichTextParseError(
-              // @ts-expect-error child.type should be 'never'
               `Unknown list item of type ${child.type}`,
-              // @ts-expect-error child.type should be 'never'
-              child.position
+              position
             )
         }
       }),
@@ -196,7 +254,7 @@ export const remarkToSlate = (
   }
 
   const unwrapBlockContent = (
-    content: Md.BlockContent
+    content: Md.BlockContent | Md.DefinitionContent
   ): Plate.InlineElement[] => {
     const flattenPhrasingContent = (
       children: Md.PhrasingContent[]
@@ -208,10 +266,39 @@ export const remarkToSlate = (
       case 'heading':
       case 'paragraph':
         return flattenPhrasingContent(content.children)
+      /**
+       * Eg.
+       *
+       * >>> my content
+       */
+      case 'html':
+        return [html_inline(content)]
+      case 'blockquote':
+      // TODO
       default:
-        throw new Error(
-          `UnwrapBlock: Unknown block content of type ${content.type}`
+        throw new RichTextParseError(
+          // @ts-ignore
+          `UnwrapBlock: Unknown block content of type ${content.type}`,
+          // @ts-ignore
+          content.position
         )
+    }
+  }
+
+  const parseCode = (
+    content: Md.Code
+  ): Plate.CodeBlockElement | Plate.MermaidElement => {
+    if (content.lang === 'mermaid') {
+      return mermaid(content)
+    }
+    return code(content)
+  }
+
+  const mermaid = (content: Md.Code): Plate.MermaidElement => {
+    return {
+      type: 'mermaid',
+      value: content.value,
+      children: [{ type: 'text', text: '' }],
     }
   }
 
@@ -228,7 +315,7 @@ export const remarkToSlate = (
   const link = (content: Md.Link): Plate.LinkElement => {
     return {
       type: 'a',
-      url: content.url,
+      url: sanitizeUrl(content.url),
       title: content.title,
       children: flatten(
         content.children.map((child) => staticPhrasingContent(child))
@@ -256,6 +343,8 @@ export const remarkToSlate = (
       case 'image':
       case 'strong':
         return phrashingMark(content)
+      case 'html':
+        return html_inline(content)
       default:
         throw new Error(
           `StaticPhrasingContent: ${content.type} is not yet supported`
@@ -353,7 +442,12 @@ export const remarkToSlate = (
         const children = flatten(
           node.children.map((child) => phrashingMark(child, marks))
         )
-        accum.push({ type: 'a', url: node.url, title: node.title, children })
+        accum.push({
+          type: 'a',
+          url: sanitizeUrl(node.url),
+          title: node.title,
+          children,
+        })
         break
       }
       case 'text':
@@ -361,8 +455,22 @@ export const remarkToSlate = (
         marks.forEach((mark) => (markProps[mark] = true))
         accum.push({ type: 'text', text: node.value, ...markProps })
         break
+      /**
+       * Eg. this is a line break
+       *                 vv
+       * _Some italicized
+       * text on 2 lines_
+       */
+      case 'break':
+        accum.push(breakContent())
+        break
       default:
-        throw new Error(`Unexpected inline element of type ${node.type}`)
+        // throw new Error(`Unexpected inline element of type ${node.type}`)
+        throw new RichTextParseError(
+          `Unexpected inline element of type ${node.type}`,
+          // @ts-ignore
+          node?.position
+        )
     }
     return accum
   }
@@ -371,7 +479,7 @@ export const remarkToSlate = (
     return {
       type: 'img',
       url: imageCallback(content.url),
-      alt: content.alt,
+      alt: content.alt || undefined, // alt cannot be `null`
       caption: content.title,
       children: [{ type: 'text', text: '' }],
     }
@@ -427,21 +535,9 @@ export const remarkToSlate = (
   }
 }
 
-export type PositionItem = {
-  line?: number | null
-  column?: number | null
-  offset?: number | null
-  _index?: number | null
-  _bufferIndex?: number | null
-}
-export type Position = {
-  start: PositionItem
-  end: PositionItem
-}
-
 export class RichTextParseError extends Error {
-  public position?: Position
-  constructor(message: string, position?: Position) {
+  public position?: Plate.Position
+  constructor(message: string, position?: Plate.Position) {
     // Pass remaining arguments (including vendor specific ones) to parent constructor
     super(message)
 
@@ -453,5 +549,45 @@ export class RichTextParseError extends Error {
     this.name = 'RichTextParseError'
     // Custom debugging information
     this.position = position
+  }
+}
+
+// Prevent javascript scheme (eg. `javascript:alert(document.domain)`)
+export const sanitizeUrl = (url: string | undefined) => {
+  const allowedSchemes = ['http', 'https', 'mailto', 'tel', 'xref']
+  if (!url) return ''
+
+  let parsedUrl: URL | null = null
+
+  try {
+    parsedUrl = new URL(url)
+  } catch (error) {
+    return url
+  }
+
+  const scheme = parsedUrl.protocol.slice(0, -1)
+  if (allowedSchemes && !allowedSchemes.includes(scheme)) {
+    console.warn(`Invalid URL scheme detected ${scheme}`)
+    return ''
+  }
+
+  /**
+   * Trailing slash is added from new URL(...) for urls with no pathname,
+   * if the passed in url had one, keep it there, else just use the origin
+   * eg:
+   *
+   * http://example.com/ -> http://example.com/
+   * http://example.com -> http://example.com
+   * http://example.com/a/b -> http://example.com/a/b
+   * http://example.com/a/b/ -> http://example.com/a/b/
+   */
+  if (parsedUrl.pathname === '/') {
+    if (url.endsWith('/')) {
+      return parsedUrl.href
+    }
+    // Include search (query parameters) and hash if they exist
+    return `${parsedUrl.origin}${parsedUrl.search}${parsedUrl.hash}`
+  } else {
+    return parsedUrl.href
   }
 }

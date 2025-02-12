@@ -1,28 +1,14 @@
 /**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+
 */
 
 import { build } from 'vite'
 import { build as esbuild } from 'esbuild'
 import fs from 'fs-extra'
-import path from 'path'
+import path from 'node:path'
 import chokidar from 'chokidar'
-import { exec } from 'child_process'
+import { exec } from 'node:child_process'
 import chalk from 'chalk'
-import tailwind from 'tailwindcss'
-import postcssNested from 'postcss-nested'
-import tailwindNesting from 'tailwindcss/nesting'
-
-const defaultTheme = require('tailwindcss/defaultTheme')
 
 import * as commander from 'commander'
 
@@ -42,8 +28,32 @@ interface Option {
   description: string
 }
 
+const deepMerge = (target, source) => {
+  for (const key in source) {
+    if (!source.hasOwnProperty(key) || key === '__proto__' || key === 'constructor') continue;
+    if (
+      source[key] instanceof Object &&
+      !Array.isArray(source[key]) &&
+      target.hasOwnProperty(key)
+    ) {
+      // If both target and source have the same key and it's an object, merge them recursively
+      target[key] = deepMerge(target[key], source[key])
+    } else if (Array.isArray(source[key]) && Array.isArray(target[key])) {
+      // If both target and source have the same key and it's an array, concatenate them
+      target[key] = [...new Set([...target[key], ...source[key]])] // Merging arrays and removing duplicates
+    } else if (Array.isArray(source[key])) {
+      // If source has an array and target doesn't, use the source array
+      target[key] = [...source[key]]
+    } else {
+      // Otherwise, take the value from the source
+      target[key] = source[key]
+    }
+  }
+  return target
+}
+
 const program = new commander.Command('Tina Build')
-const registerCommands = (commands: Command[], noHelp: boolean = false) => {
+const registerCommands = (commands: Command[], noHelp = false) => {
   commands.forEach((command, i) => {
     let newCmd = program
       .command(command.command, { noHelp })
@@ -56,7 +66,7 @@ const registerCommands = (commands: Command[], noHelp: boolean = false) => {
       newCmd = newCmd.alias(command.alias)
     }
 
-    newCmd.on('--help', function () {
+    newCmd.on('--help', () => {
       if (command.examples) {
         console.log(`\nExamples:\n  ${command.examples}`)
       }
@@ -130,10 +140,12 @@ const watch = () => {
       console.error(`exec error: ${error}`)
       return
     }
+
     const json = JSON.parse(stdout) as { name: string; path: string }[]
-    const watchPaths: string[] = []
+    const watchPaths = []
+
     json.forEach((pkg) => {
-      if (pkg.path.includes('/packages/')) {
+      if (pkg.path.includes(path.join('packages', ''))) {
         watchPaths.push(pkg.path)
       }
     })
@@ -141,14 +153,11 @@ const watch = () => {
     chokidar
       .watch(
         watchPaths.map((p) => path.join(p, 'src', '**/*')),
-        {
-          ignored: ['**/spec/**/*', 'node_modules'],
-        }
+        { ignored: ['**/spec/**/*', 'node_modules'] }
       )
       .on('change', async (path) => {
         const changedPackagePath = watchPaths.find((p) => path.startsWith(p))
         await run({ dir: changedPackagePath })
-        // console.log('change', changedPackagePath)
       })
   })
 }
@@ -198,232 +207,6 @@ e.g: "forestry types:gen --help"
   program.parse(args)
 }
 
-const config = (cwd = '') => {
-  return {
-    important: '.tina-tailwind',
-    theme: {
-      columns: {
-        auto: 'auto',
-        1: '1',
-        2: '2',
-        3: '3',
-        4: '4',
-        5: '5',
-        6: '6',
-        7: '7',
-        8: '8',
-        9: '9',
-        10: '10',
-        11: '11',
-        12: '12',
-        '3xs': '256px',
-        '2xs': '288px',
-        xs: '320px',
-        sm: '384px',
-        md: '448px',
-        lg: '512px',
-        xl: '576px',
-        '2xl': '672px',
-        '3xl': '768px',
-        '4xl': '896px',
-        '5xl': '1024px',
-        '6xl': '1152px',
-        '7xl': '1280px',
-      },
-      spacing: {
-        px: '1px',
-        0: '0px',
-        0.5: '2px',
-        1: '4px',
-        1.5: '6px',
-        2: '8px',
-        2.5: '10px',
-        3: '12px',
-        3.5: '14px',
-        4: '16px',
-        5: '20px',
-        6: '24px',
-        7: '28px',
-        8: '32px',
-        9: '36px',
-        10: '40px',
-        11: '44px',
-        12: '48px',
-        14: '56px',
-        16: '64px',
-        18: '72px',
-        20: '80px',
-        24: '96px',
-        28: '114px',
-        32: '128px',
-        36: '144px',
-        40: '160px',
-        44: '176px',
-        48: '192px',
-        52: '208px',
-        56: '224px',
-        60: '240px',
-        64: '256px',
-        72: '288px',
-        80: '320px',
-        96: '384px',
-      },
-      borderRadius: {
-        none: '0px',
-        sm: '2px',
-        DEFAULT: '4px',
-        md: '6px',
-        lg: '8px',
-        xl: '12px',
-        '2xl': '16px',
-        '3xl': '24px',
-        full: '9999px',
-      },
-      borderWidth: {
-        DEFAULT: '1px',
-        0: '0',
-        2: '2px',
-        3: '3px',
-        4: '4px',
-        6: '6px',
-        8: '8px',
-      },
-      fontSize: {
-        xs: ['13px', { lineHeight: '1.33' }],
-        sm: ['14px', { lineHeight: '1.43' }],
-        base: ['16px', { lineHeight: '1.5' }],
-        md: ['16px', { lineHeight: '1.5' }],
-        lg: ['18px', { lineHeight: '1.55' }],
-        xl: ['20px', { lineHeight: '1.4' }],
-        '2xl': ['24px', { lineHeight: '1.33' }],
-        '3xl': ['30px', { lineHeight: '1.2' }],
-        '4xl': ['36px', { lineHeight: '1.1' }],
-        '5xl': ['48px', { lineHeight: '1' }],
-        '6xl': ['60px', { lineHeight: '1' }],
-        '7xl': ['72px', { lineHeight: '1' }],
-        '8xl': ['96px', { lineHeight: '1' }],
-        '9xl': ['128px', { lineHeight: '1' }],
-      },
-      opacity: {
-        0: '0',
-        5: '.05',
-        7: '.07',
-        10: '.1',
-        15: '.15',
-        20: '.2',
-        25: '.25',
-        30: '.3',
-        40: '.4',
-        50: '.5',
-        60: '.6',
-        70: '.7',
-        75: '.75',
-        80: '.8',
-        90: '.9',
-        100: '1',
-      },
-      zIndex: {
-        '-1': -1,
-        base: 9000,
-        panel: 9400,
-        menu: 9800,
-        chrome: 10200,
-        overlay: 10600,
-        modal: 10800,
-        '0': 0,
-        '10': 10,
-        '20': 20,
-        '30': 30,
-        '40': 40,
-        '25': 25,
-        '50': 50,
-        '75': 75,
-        '100': 100,
-        auto: 'auto',
-      },
-      extend: {
-        animation: {
-          'spin-reverse': 'spin 1s linear infinite reverse',
-        },
-        scale: {
-          97: '.97',
-          103: '1.03',
-        },
-        transitionDuration: {
-          0: '0ms',
-          2000: '2000ms',
-        },
-        boxShadow: {
-          xs: '0 0 0 1px rgba(0, 0, 0, 0.05)',
-          outline: '0 0 0 3px rgba(66, 153, 225, 0.5)',
-        },
-        colors: {
-          blue: {
-            50: '#DCEEFF',
-            100: '#B4DBFF',
-            200: '#85C5FE',
-            300: '#4EABFE',
-            400: '#2296fe',
-            500: '#0084FF',
-            600: '#0574e4',
-            700: '#0D5DBD',
-            800: '#144696',
-            900: '#1D2C6C',
-            1000: '#241748',
-          },
-          gray: {
-            50: '#F6F6F9',
-            100: '#EDECF3',
-            150: '#E6E3EF',
-            200: '#E1DDEC',
-            250: '#C9C5D5',
-            300: '#b2adbe',
-            400: '#918c9e',
-            500: '#716c7f',
-            600: '#565165',
-            700: '#433e52',
-            800: '#363145',
-            900: '#252336',
-            1000: '#1c1b2e',
-          },
-          orange: {
-            400: '#EB6337',
-            500: '#EC4815',
-            600: '#DC4419',
-          },
-        },
-        fontFamily: {
-          sans: ['Inter', ...defaultTheme.fontFamily.sans],
-        },
-        lineHeight: {
-          3: '12px',
-          4: '16px',
-          5: '20px',
-          6: '24px',
-          7: '28px',
-          8: '32px',
-          9: '36px',
-          10: '40px',
-        },
-        maxWidth: {
-          form: '900px',
-        },
-      },
-    },
-    content: [path.join(cwd, 'src/**/*.{vue,js,ts,jsx,tsx,svelte}')],
-    plugins: [
-      require('@tailwindcss/typography')({
-        className: 'tina-prose',
-      }),
-      require('@tailwindcss/line-clamp'),
-      require('@tailwindcss/aspect-ratio'),
-    ],
-    corePlugins: {
-      preflight: false,
-    },
-  }
-}
-
 export const buildIt = async (entryPoint, packageJSON) => {
   const entry = typeof entryPoint === 'string' ? entryPoint : entryPoint.name
   const target = typeof entryPoint === 'string' ? 'browser' : entryPoint.target
@@ -450,6 +233,11 @@ export const buildIt = async (entryPoint, packageJSON) => {
 
   const outInfo = out(entry)
 
+  if (['@tinacms/app'].includes(packageJSON.name)) {
+    console.log('skipping @tinacms/app')
+    return
+  }
+
   external.forEach((ext) => (globals[ext] = 'NOOP'))
   if (target === 'node') {
     if (['@tinacms/graphql', '@tinacms/datalayer'].includes(packageJSON.name)) {
@@ -461,15 +249,28 @@ export const buildIt = async (entryPoint, packageJSON) => {
         // the syntax for optional chaining, should be supported on 14
         // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Optional_chaining
         target: 'node12',
-        outfile: path.join(process.cwd(), 'dist', 'index.js'),
+        // Use the outfile if it is provided
+        outfile: outInfo.outfile
+          ? path.join(process.cwd(), 'dist', `${outInfo.outfile}.js`)
+          : path.join(process.cwd(), 'dist', 'index.js'),
         external: external.filter(
           (item) =>
             !packageJSON.buildConfig.entryPoints[0].bundle.includes(item)
         ),
       })
+      await esbuild({
+        entryPoints: [path.join(process.cwd(), entry)],
+        bundle: true,
+        platform: 'node',
+        target: 'es2020',
+        format: 'esm',
+        outfile: outInfo.outfile
+          ? path.join(process.cwd(), 'dist', `${outInfo.outfile}.mjs`)
+          : path.join(process.cwd(), 'dist', 'index.mjs'),
+        external,
+      })
     } else if (['@tinacms/mdx'].includes(packageJSON.name)) {
       const peerDeps = packageJSON.peerDependencies
-      const external = Object.keys({ ...peerDeps })
       await esbuild({
         entryPoints: [path.join(process.cwd(), entry)],
         bundle: true,
@@ -480,7 +281,32 @@ export const buildIt = async (entryPoint, packageJSON) => {
         target: 'node12',
         format: 'cjs',
         outfile: path.join(process.cwd(), 'dist', 'index.js'),
-        external,
+        external: Object.keys({ ...peerDeps }),
+      })
+      await esbuild({
+        entryPoints: [path.join(process.cwd(), entry)],
+        bundle: true,
+        platform: 'node',
+        target: 'es2020',
+        format: 'esm',
+        outfile: path.join(process.cwd(), 'dist', 'index.mjs'),
+        // Bundle dependencies, the remark ecosystem only publishes ES modules
+        // and includes "development" export maps which actually throw errors during
+        // development, which we don't want to expose our users to.
+        external: Object.keys({ ...peerDeps }),
+      })
+      // The ES version is targeting the browser, this is used by the rich-text's raw mode
+      await esbuild({
+        entryPoints: [path.join(process.cwd(), entry)],
+        bundle: true,
+        platform: 'browser',
+        target: 'es2020',
+        format: 'esm',
+        outfile: path.join(process.cwd(), 'dist', 'index.browser.mjs'),
+        // Bundle dependencies, the remark ecosystem only publishes ES modules
+        // and includes "development" export maps which actually throw errors during
+        // development, which we don't want to expose our users to.
+        external: Object.keys({ ...peerDeps }),
       })
     } else {
       await esbuild({
@@ -509,27 +335,12 @@ export const buildIt = async (entryPoint, packageJSON) => {
   }
 
   const defaultBuildConfig: Parameters<typeof build>[0] = {
-    plugins: [
-      {
-        name: 'vite-plugin-tina',
-        config: (_, env) => {
-          let plugins = []
-
-          const tw = tailwind(config(process.cwd()))
-          plugins.push(tailwindNesting)
-          plugins.push(postcssNested)
-          plugins.push(tw)
-
-          return {
-            css: {
-              postcss: {
-                plugins,
-              },
-            },
-          }
-        },
+    resolve: {
+      alias: {
+        '@toolkit': path.resolve(process.cwd(), 'src/toolkit'),
+        '@tinacms/toolkit': path.resolve(process.cwd(), 'src/toolkit/index.ts'),
       },
-    ],
+    },
     build: {
       minify: false,
       assetsInlineLimit: 0,
@@ -539,13 +350,19 @@ export const buildIt = async (entryPoint, packageJSON) => {
         fileName: (format) => {
           return format === 'umd'
             ? `${outInfo.outfile}.js`
-            : `${outInfo.outfile}.es.js`
+            : `${outInfo.outfile}.mjs`
         },
       },
       outDir: outInfo.outdir,
       emptyOutDir: false, // we build multiple files in to the dir
       sourcemap: false, // true | 'inline' (note: inline will go straight into your bundle size)
       rollupOptions: {
+        onwarn(warning, warn) {
+          if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
+            return
+          }
+          warn(warning)
+        },
         // /**
         //  * FIXME: rollup-plugin-node-polyfills is only needed for node targets
         //  */
@@ -572,10 +389,7 @@ export const buildIt = async (entryPoint, packageJSON) => {
     },
   }
   const buildConfig = packageJSON.buildConfig
-    ? {
-        ...defaultBuildConfig,
-        ...packageJSON.buildConfig,
-      }
+    ? deepMerge(defaultBuildConfig, packageJSON.buildConfig)
     : defaultBuildConfig
 
   await build({

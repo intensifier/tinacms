@@ -1,14 +1,5 @@
 /**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+
 */
 
 import React from 'react'
@@ -27,16 +18,27 @@ type BaseComponents = {
   strikethrough?: { children: JSX.Element }
   underline?: { children: JSX.Element }
   code?: { children: JSX.Element }
+  text?: { children: string }
   ul?: { children: JSX.Element }
   ol?: { children: JSX.Element }
+  li?: { children: JSX.Element }
+  lic?: { children: JSX.Element }
   block_quote?: { children: JSX.Element }
-  code_block?: { lang?: string; children: JSX.Element }
+  code_block?: { lang?: string; value: string }
+  mermaid?: { value: string }
   img?: { url: string; caption?: string; alt?: string }
   hr?: {}
   break?: {}
   maybe_mdx?: { children: JSX.Element }
   html?: { value: string }
   html_inline?: { value: string }
+  // th?: { children: JSX.Element }
+  // td?: { children: JSX.Element }
+  // tr?: { children: JSX.Element }
+  table?: {
+    align?: ('left' | 'right' | 'center')[]
+    tableRows: { tableCells: { value: TinaMarkdownContent }[] }[]
+  }
   // Provide a fallback when a JSX component wasn't provided
   component_missing?: { name: string }
 }
@@ -81,13 +83,20 @@ export type TinaMarkdownContent = {
   children: TinaMarkdownContent[]
 }
 
-export const TinaMarkdown = ({
+export const TinaMarkdown = <
+  CustomComponents extends { [key: string]: object } = any
+>({
   content,
   components = {},
 }: {
   content: TinaMarkdownContent | TinaMarkdownContent[]
-  // FIXME: {} should be passed in
-  components?: Components<{}>
+  components?:
+    | Components<{}>
+    | Components<{
+        [BK in keyof CustomComponents]: (
+          props: CustomComponents[BK]
+        ) => JSX.Element
+      }>
 }) => {
   if (!content) {
     return null
@@ -115,7 +124,7 @@ const Leaf = (props: {
   code?: boolean
   components: Pick<
     BaseComponentSignature,
-    'bold' | 'italic' | 'underline' | 'strikethrough' | 'code'
+    'bold' | 'italic' | 'underline' | 'strikethrough' | 'code' | 'text'
   >
 }) => {
   if (props.bold) {
@@ -198,6 +207,10 @@ const Leaf = (props: {
       </code>
     )
   }
+  if (props.components.text) {
+    const Component = props.components.text
+    return <Component>{props.text}</Component>
+  }
   return <>{props.text}</>
 }
 
@@ -241,6 +254,14 @@ const Node = ({ components, child }) => {
         children: <TinaMarkdown components={components} content={children} />,
       })
     case 'lic': // List Item Content
+      if (components.lic) {
+        const Component = components.lic
+        return (
+          <Component {...props}>
+            <TinaMarkdown components={components} content={children} />
+          </Component>
+        )
+      }
       return (
         <div>
           <TinaMarkdown components={components} content={child.children} />
@@ -253,7 +274,7 @@ const Node = ({ components, child }) => {
         return <Component {...props} />
       }
       // @ts-ignore FIXME: TinaMarkdownContent needs to be a union of all possible node types
-      return <img src={child.url} alt={child.caption} />
+      return <img src={child.url} alt={child.alt} />
     case 'a':
       if (components[child.type]) {
         const Component = components[child.type]
@@ -270,16 +291,14 @@ const Node = ({ components, child }) => {
           <TinaMarkdown components={components} content={children} />
         </a>
       )
-    case 'code_block':
+    case 'mermaid':
+    case 'code_block': {
       const value = child.value
       if (components[child.type]) {
         const Component = components[child.type]
         return (
           // @ts-ignore FIXME: TinaMarkdownContent needs to be a union of all possible node types
-          <Component {...props}>
-            {/* @ts-ignore FIXME: TinaMarkdownContent needs to be a union of all possible node types */}
-            {value}
-          </Component>
+          <Component {...props} />
         )
       }
       return (
@@ -287,6 +306,7 @@ const Node = ({ components, child }) => {
           <code>{value}</code>
         </pre>
       )
+    }
     case 'hr':
       if (components[child.type]) {
         const Component = components[child.type]
@@ -312,6 +332,72 @@ const Node = ({ components, child }) => {
         const props = child.props ? child.props : {}
         return <Component {...props} />
       } else {
+        if (child.name === 'table') {
+          const firstRowHeader = child.props?.firstRowHeader
+          const rows =
+            (firstRowHeader
+              ? child.props?.tableRows.filter((_, i) => i !== 0)
+              : child.props?.tableRows) || []
+          const header = child.props?.tableRows?.at(0)
+          const TableComponent =
+            components['table'] || ((props) => <table {...props} />)
+          const TrComponent = components['tr'] || ((props) => <tr {...props} />)
+          const ThComponent =
+            components['th'] ||
+            ((props) => (
+              <th style={{ textAlign: props?.align || 'auto' }} {...props} />
+            ))
+          const TdComponent =
+            components['td'] ||
+            ((props) => (
+              <td style={{ textAlign: props?.align || 'auto' }} {...props} />
+            ))
+          const align = child.props?.align || []
+          return (
+            <TableComponent>
+              {firstRowHeader && (
+                <thead>
+                  <TrComponent>
+                    {header.tableCells.map((c, i) => {
+                      return (
+                        <TinaMarkdown
+                          key={i}
+                          components={{
+                            p: (props) => (
+                              <ThComponent align={align[i]} {...props} />
+                            ),
+                          }}
+                          content={c.value}
+                        />
+                      )
+                    })}
+                  </TrComponent>
+                </thead>
+              )}
+              <tbody>
+                {rows.map((row, i) => {
+                  return (
+                    <TrComponent key={i}>
+                      {row?.tableCells?.map((c, i) => {
+                        return (
+                          <TinaMarkdown
+                            key={i}
+                            components={{
+                              p: (props) => (
+                                <TdComponent align={align[i]} {...props} />
+                              ),
+                            }}
+                            content={c.value}
+                          />
+                        )
+                      })}
+                    </TrComponent>
+                  )
+                })}
+              </tbody>
+            </TableComponent>
+          )
+        }
         const ComponentMissing = components['component_missing']
         if (ComponentMissing) {
           // @ts-ignore FIXME: TinaMarkdownContent needs to be a union of all possible node types
@@ -320,6 +406,52 @@ const Node = ({ components, child }) => {
           return <span>{`No component provided for ${child.name}`}</span>
         }
       }
+    case 'table':
+      const rows = child.children || []
+      const TableComponent =
+        components['table'] ||
+        ((props) => (
+          <table style={{ border: '1px solid #EDECF3' }} {...props} />
+        ))
+      const TrComponent = components['tr'] || ((props) => <tr {...props} />)
+      const TdComponent =
+        components['td'] ||
+        ((props) => (
+          <td
+            style={{
+              textAlign: props?.align || 'auto',
+              border: '1px solid #EDECF3',
+              padding: '0.25rem',
+            }}
+            {...props}
+          />
+        ))
+      const align = child.props?.align || []
+      return (
+        <TableComponent>
+          <tbody>
+            {rows.map((row, i) => {
+              return (
+                <TrComponent key={i}>
+                  {row.children?.map((cell, i) => {
+                    return (
+                      <TinaMarkdown
+                        key={i}
+                        components={{
+                          p: (props) => (
+                            <TdComponent align={align[i]} {...props} />
+                          ),
+                        }}
+                        content={cell.children}
+                      />
+                    )
+                  })}
+                </TrComponent>
+              )
+            })}
+          </tbody>
+        </TableComponent>
+      )
     case 'maybe_mdx':
       /**
        * We don't want to render this as it's only displayed while editing an mdx node and should

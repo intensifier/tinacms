@@ -1,31 +1,22 @@
 /**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+
 */
 
 import type { GraphQLConfig } from '../types'
-import type { TinaCloudSchemaEnriched } from '@tinacms/schema-tools'
+import type { Schema } from '@tinacms/schema-tools'
 
 /**
  * Strips away the Tina Cloud Asset URL from an `image` value
  *
- * @param {string} value
+ * @param {string | string[]} value
  * @param {GraphQLConfig} config
  * @returns {string}
  */
 
 export const resolveMediaCloudToRelative = (
-  value: string,
+  value: string | string[],
   config: GraphQLConfig = { useRelativeMedia: true },
-  schema: TinaCloudSchemaEnriched
+  schema: Schema<true>
 ) => {
   if (config && value) {
     if (config.useRelativeMedia === true) {
@@ -34,12 +25,23 @@ export const resolveMediaCloudToRelative = (
 
     if (hasTinaMediaConfig(schema) === true) {
       const assetsURL = `https://${config.assetsHost}/${config.clientId}`
+
       if (typeof value === 'string' && value.includes(assetsURL)) {
         const cleanMediaRoot = cleanUpSlashes(
           schema.config.media.tina.mediaRoot
         )
         const strippedURL = value.replace(assetsURL, '')
         return `${cleanMediaRoot}${strippedURL}`
+      }
+      if (Array.isArray(value)) {
+        return value.map((v) => {
+          if (!v || typeof v !== 'string') return v
+          const cleanMediaRoot = cleanUpSlashes(
+            schema.config.media.tina.mediaRoot
+          )
+          const strippedURL = v.replace(assetsURL, '')
+          return `${cleanMediaRoot}${strippedURL}`
+        })
       }
 
       return value
@@ -54,15 +56,15 @@ export const resolveMediaCloudToRelative = (
 /**
  * Adds Tina Cloud Asset URL to an `image` value
  *
- * @param {string} value
+ * @param {string | string[]} value
  * @param {GraphQLConfig} config
  * @returns {string}
  */
 
 export const resolveMediaRelativeToCloud = (
-  value: string,
+  value: string | string[],
   config: GraphQLConfig = { useRelativeMedia: true },
-  schema: TinaCloudSchemaEnriched
+  schema: Schema<true>
 ) => {
   if (config && value) {
     if (config.useRelativeMedia === true) {
@@ -71,8 +73,17 @@ export const resolveMediaRelativeToCloud = (
 
     if (hasTinaMediaConfig(schema) === true) {
       const cleanMediaRoot = cleanUpSlashes(schema.config.media.tina.mediaRoot)
-      const strippedValue = value.replace(cleanMediaRoot, '')
-      return `https://${config.assetsHost}/${config.clientId}${strippedValue}`
+      if (typeof value === 'string') {
+        const strippedValue = value.replace(cleanMediaRoot, '')
+        return `https://${config.assetsHost}/${config.clientId}${strippedValue}`
+      }
+      if (Array.isArray(value)) {
+        return value.map((v) => {
+          if (!v || typeof v !== 'string') return v
+          const strippedValue = v.replace(cleanMediaRoot, '')
+          return `https://${config.assetsHost}/${config.clientId}${strippedValue}`
+        })
+      }
     }
 
     return value
@@ -88,13 +99,15 @@ const cleanUpSlashes = (path: string): string => {
   return ''
 }
 
-const hasTinaMediaConfig = (schema: TinaCloudSchemaEnriched): boolean => {
-  if (
-    schema.config?.media?.tina?.publicFolder &&
-    schema.config?.media?.tina?.mediaRoot
-  ) {
-    return true
-  }
+const hasTinaMediaConfig = (schema: Schema<true>): boolean => {
+  if (!schema.config?.media?.tina) return false
 
-  return false
+  // If they don't have both publicFolder and mediaRoot, they don't have a Tina Media config
+  if (
+    typeof schema.config?.media?.tina?.publicFolder !== 'string' &&
+    typeof schema.config?.media?.tina?.mediaRoot !== 'string'
+  )
+    return false
+
+  return true
 }

@@ -1,5 +1,5 @@
 {
-  "extends": "../../../tsconfig.json",
+  "extends": "../../../base.tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
@@ -10,9 +10,20 @@
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "node",
     "module": "ESNext",
-    "lib": ["ESNext"],
-    "types": ["vite/client"]
+    "lib": [
+      "ESNext"
+    ],
+    "target": "ESNext",
+    "types": [
+      "vite/client"
+    ],
   },
-  "exclude": ["node_modules", "dist"],
-  "include": ["src", "vite-env.d.ts"]
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "include": [
+    "src",
+    "vite-env.d.ts"
+  ]
 }

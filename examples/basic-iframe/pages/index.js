@@ -1,4 +1,4 @@
-import { staticRequest } from 'tinacms'
+import client from '../tina/__generated__/client'
 import { TinaMarkdown } from 'tinacms/dist/rich-text'
 import { Layout } from '../components/Layout'
 import { useTina } from 'tinacms/dist/react'
@@ -27,7 +27,7 @@ export const getStaticProps = async () => {
   const variables = {}
   let data = {}
   try {
-    data = await staticRequest({
+    data = await client.request({
       query,
       variables,
     })
@@ -39,7 +39,7 @@ export const getStaticProps = async () => {
     props: {
       query,
       variables,
-      data,
+      data: data.data,
       //myOtherProp: 'some-other-data',
     },
   }
