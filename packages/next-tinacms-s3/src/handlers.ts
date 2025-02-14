@@ -1,14 +1,5 @@
 /**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+
 */
 
 import {
@@ -18,20 +9,20 @@ import {
   ListObjectsCommand,
   ListObjectsCommandInput,
   PutObjectCommand,
-  PutObjectCommandInput,
   DeleteObjectCommand,
   DeleteObjectCommandInput,
+  HeadObjectCommand,
+  HeadObjectCommandOutput,
 } from '@aws-sdk/client-s3'
-import { Media, MediaListOptions } from '@tinacms/toolkit'
-import path from 'path'
-import fs from 'fs'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { Media, MediaListOptions } from 'tinacms'
+import path from 'node:path'
 import { NextApiRequest, NextApiResponse } from 'next'
-import multer from 'multer'
-import { promisify } from 'util'
 
 export interface S3Config {
   config: S3ClientConfig
   bucket: string
+  mediaRoot?: string
   authorized: (_req: NextApiRequest, _res: NextApiResponse) => Promise<boolean>
 }
 
@@ -49,11 +40,21 @@ export const createMediaHandler = (config: S3Config, options?: S3Options) => {
   const client = new S3Client(config.config)
   const bucket = config.bucket
   const region = config.config.region || 'us-east-1'
+  let mediaRoot = config.mediaRoot || ''
+  if (mediaRoot) {
+    if (!mediaRoot.endsWith('/')) {
+      mediaRoot = mediaRoot + '/'
+    }
+    if (mediaRoot.startsWith('/')) {
+      mediaRoot = mediaRoot.substr(1)
+    }
+  }
   const endpoint =
     config.config.endpoint || `https://s3.${region}.amazonaws.com`
-  const cdnUrl =
+  let cdnUrl =
     options?.cdnUrl ||
     endpoint.toString().replace(/http(s|):\/\//i, `https://${bucket}.`)
+  cdnUrl = cdnUrl + (cdnUrl.endsWith('/') ? '' : '/')
 
   return async (req: NextApiRequest, res: NextApiResponse) => {
     const isAuthorized = await config.authorized(req, res)
@@ -64,9 +65,31 @@ export const createMediaHandler = (config: S3Config, options?: S3Options) => {
     }
     switch (req.method) {
       case 'GET':
-        return listMedia(req, res, client, bucket, cdnUrl)
-      case 'POST':
-        return uploadMedia(req, res, client, bucket)
+        if (req.url.startsWith('/api/s3/media/upload_url')) {
+          const expiresIn: number =
+            (req.query.expiresIn && Number(req.query.expiresIn)) || 3600
+          const s3_key = req.query.key
+            ? Array.isArray(req.query.key)
+              ? req.query.key[0]
+              : req.query.key
+            : null
+          if (!s3_key) {
+            return res.status(400).json({ message: 'key is required' })
+          }
+          if (await keyExists(client, bucket, s3_key)) {
+            return res.status(400).json({ message: 'key already exists' })
+          }
+          const signedUrl = await getUploadUrl(
+            bucket,
+            s3_key,
+            expiresIn,
+            client
+          )
+
+          return res.json({ signedUrl, src: cdnUrl + s3_key })
+        } else {
+          return listMedia(req, res, client, bucket, mediaRoot, cdnUrl)
+        }
       case 'DELETE':
         return deleteAsset(req, res, client, bucket)
       default:
@@ -75,54 +98,22 @@ export const createMediaHandler = (config: S3Config, options?: S3Options) => {
   }
 }
 
-async function uploadMedia(
-  req: NextApiRequest,
-  res: NextApiResponse,
-  client: S3Client,
-  bucket: string
-) {
-  try {
-    const upload = promisify(
-      multer({
-        storage: multer.diskStorage({
-          // eslint-disable-next-line @typescript-eslint/ban-ts-ignore
-          // @ts-ignore
-          directory: (req, file, cb) => {
-            cb(null, '/tmp')
-          },
-          filename: (req, file, cb) => {
-            cb(null, file.originalname)
-          },
-        }),
-      }).single('file')
-    )
-    // eslint-disable-next-line @typescript-eslint/ban-ts-ignore
-    // @ts-ignore
-    await upload(req, res)
-
-    const { directory } = req.body
-    let prefix = directory.replace(/^\//, '').replace(/\/$/, '')
-    if (prefix) prefix = prefix + '/'
-
-    // eslint-disable-next-line @typescript-eslint/ban-ts-ignore
-    // @ts-ignore
-    const filePath = req.file.path
-    const blob = fs.readFileSync(filePath)
-    const params: PutObjectCommandInput = {
-      Bucket: bucket,
-      Key: prefix + path.basename(filePath),
-      Body: blob,
-      ACL: 'public-read',
-    }
-    const command = new PutObjectCommand(params)
-    const result = await client.send(command)
-
-    res.json(result)
-  } catch (e) {
-    res.status(500)
-    const message = findErrorMessage(e)
-    res.json({ e: message })
+function stripMediaRoot(mediaRoot: string, key: string) {
+  if (!mediaRoot) {
+    return key
   }
+  const mediaRootParts = mediaRoot.split('/').filter((part) => part)
+  if (!mediaRootParts || !mediaRootParts[0]) {
+    return key
+  }
+  const keyParts = key.split('/').filter((part) => part)
+  // remove each part of the key that matches the mediaRoot parts
+  for (let i = 0; i < mediaRootParts.length; i++) {
+    if (keyParts[0] === mediaRootParts[i]) {
+      keyParts.shift()
+    }
+  }
+  return keyParts.join('/')
 }
 
 async function listMedia(
@@ -130,6 +121,7 @@ async function listMedia(
   res: NextApiResponse,
   client: S3Client,
   bucket: string,
+  mediaRoot: string,
   cdnUrl: string
 ) {
   try {
@@ -145,7 +137,7 @@ async function listMedia(
     const params: ListObjectsCommandInput = {
       Bucket: bucket,
       Delimiter: '/',
-      Prefix: prefix,
+      Prefix: mediaRoot ? path.join(mediaRoot, prefix) : prefix,
       Marker: offset?.toString(),
       MaxKeys: directory && !offset ? +limit + 1 : +limit,
     }
@@ -156,19 +148,26 @@ async function listMedia(
 
     const items = []
 
-    response.CommonPrefixes?.forEach(({ Prefix }) =>
+    response.CommonPrefixes?.forEach(({ Prefix }) => {
+      const strippedPrefix = stripMediaRoot(mediaRoot, Prefix)
+      if (!strippedPrefix) {
+        return
+      }
       items.push({
         id: Prefix,
         type: 'dir',
-        filename: path.basename(Prefix),
-        directory: path.dirname(Prefix),
+        filename: path.basename(strippedPrefix),
+        directory: path.dirname(strippedPrefix),
       })
-    )
+    })
 
     items.push(
       ...(response.Contents || [])
-        .filter((file) => file.Key !== prefix)
-        .map(getS3ToTinaFunc(cdnUrl))
+        .filter((file) => {
+          const strippedKey = stripMediaRoot(mediaRoot, file.Key)
+          return strippedKey !== prefix
+        })
+        .map(getS3ToTinaFunc(cdnUrl, mediaRoot))
     )
 
     res.json({
@@ -176,6 +175,9 @@ async function listMedia(
       offset: response.NextMarker,
     })
   } catch (e) {
+    // Show the error to the user
+    console.error('Error listing media')
+    console.error(e)
     res.status(500)
     const message = findErrorMessage(e)
     res.json({ e: message })
@@ -213,23 +215,69 @@ async function deleteAsset(
     const data = await client.send(command)
     res.json(data)
   } catch (e) {
+    console.error('Error deleting media')
+    console.error(e)
     res.status(500)
     const message = findErrorMessage(e)
     res.json({ e: message })
   }
 }
 
-function getS3ToTinaFunc(cdnUrl) {
-  return function s3ToTina(file: _Object): Media {
-    const filename = path.basename(file.Key)
-    const directory = path.dirname(file.Key) + '/'
+async function keyExists(client: S3Client, bucket: string, key: string) {
+  try {
+    const cmd = new HeadObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    })
+    const output: HeadObjectCommandOutput = await client.send(cmd)
+    return output && output.$metadata.httpStatusCode === 200
+  } catch (error: any) {
+    if (error.$metadata?.httpStatusCode === 404) {
+      // doesn't exist and permission policy includes s3:ListBucket
+      return false
+    } else if (error.$metadata?.httpStatusCode === 403) {
+      // doesn't exist, permission policy WITHOUT s3:ListBucket
+      return false
+    } else {
+      throw new Error('unexpected error checking if key exists')
+    }
+  }
+}
 
+export const getUploadUrl = async (
+  bucket: string,
+  key: string,
+  expiresIn: number,
+  client: S3Client
+): Promise<string> => {
+  // Create the presigned URL.
+  return getSignedUrl(
+    client,
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    }),
+    { expiresIn }
+  )
+}
+
+function getS3ToTinaFunc(cdnUrl, mediaRoot?: string) {
+  return function s3ToTina(file: _Object): Media {
+    const strippedKey = stripMediaRoot(mediaRoot, file.Key)
+    const filename = path.basename(strippedKey)
+    const directory = path.dirname(strippedKey) + '/'
+
+    const src = cdnUrl + file.Key
     return {
       id: file.Key,
       filename,
       directory,
-      src: cdnUrl + '/' + file.Key,
-      previewSrc: cdnUrl + '/' + file.Key,
+      src: src,
+      thumbnails: {
+        '75x75': src,
+        '400x400': src,
+        '1000x1000': src,
+      },
       type: 'file',
     }
   }

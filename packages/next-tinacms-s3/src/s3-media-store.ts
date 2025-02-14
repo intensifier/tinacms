@@ -1,23 +1,16 @@
 /**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+
 */
 
-import {
+import type {
   Media,
   MediaList,
   MediaListOptions,
   MediaStore,
   MediaUploadOptions,
-} from '@tinacms/toolkit'
+} from 'tinacms'
+import { DEFAULT_MEDIA_UPLOAD_TYPES } from 'tinacms'
+const s3ErrorRegex = /<Error>.*<Code>(.+)<\/Code>.*<Message>(.+)<\/Message>.*/
 
 import { E_UNAUTHORIZED, E_BAD_ROUTE, interpretErrorMessage } from './errors'
 
@@ -25,28 +18,57 @@ export class S3MediaStore implements MediaStore {
   fetchFunction = (input: RequestInfo, init?: RequestInit) => {
     return fetch(input, init)
   }
-  accept = 'text/*,  application/*, image/*'
+  accept = DEFAULT_MEDIA_UPLOAD_TYPES
 
   async persist(media: MediaUploadOptions[]): Promise<Media[]> {
-    let newFiles: Media[] = []
+    const newFiles: Media[] = []
 
     for (const item of media) {
-      const { file, directory } = item
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('directory', directory)
-      formData.append('filename', file.name)
+      let directory = item.directory
+      if (directory?.endsWith('/')) {
+        directory = directory.substr(0, directory.length - 1)
+      }
+      const path = `${
+        directory && directory !== '/'
+          ? `${directory}/${item.file.name}`
+          : item.file.name
+      }`
 
-      const res = await this.fetchFunction(`/api/s3/media`, {
-        method: 'POST',
-        body: formData,
-      })
+      const res = await this.fetchFunction(
+        `/api/s3/media/upload_url?key=${path}`,
+        {
+          method: 'GET',
+        }
+      )
 
       if (res.status != 200) {
         const responseData = await res.json()
         throw new Error(responseData.message)
       }
-      const fileRes = await res.json()
+      const { signedUrl, src } = await res.json()
+      if (!signedUrl || !src) {
+        throw new Error('Unexpected error generating upload url')
+      }
+
+      const uploadRes = await fetch(signedUrl, {
+        method: 'PUT',
+        body: item.file,
+        headers: {
+          'Content-Type': item.file.type || 'application/octet-stream',
+        },
+      })
+
+      if (!uploadRes.ok) {
+        const xmlRes = await uploadRes.text()
+        const matches = s3ErrorRegex.exec(xmlRes)
+        console.error(xmlRes)
+        if (!matches) {
+          throw new Error('Unexpected error uploading media asset')
+        } else {
+          throw new Error(`Upload error: '${matches[2]}'`)
+        }
+      }
+
       /**
        * Images uploaded to S3 aren't instantly available via the API;
        * waiting a couple seconds here seems to ensure they show up in the next fetch.
@@ -59,15 +81,19 @@ export class S3MediaStore implements MediaStore {
        * Valid S3 `resource_type` values: `image`, `video`, `raw` and `auto`
        * uploading a directory is not supported as such, type is defaulted to `file`
        */
-      const parsedRes: Media = {
-        type: 'file',
-        id: fileRes.public_id,
-        filename: fileRes.original_filename,
-        directory: '/',
-        previewSrc: fileRes.url,
-      }
 
-      newFiles.push(parsedRes)
+      newFiles.push({
+        directory: item.directory,
+        filename: item.file.name,
+        id: item.file.name,
+        type: 'file',
+        thumbnails: {
+          '75x75': src,
+          '400x400': src,
+          '1000x1000': src,
+        },
+        src,
+      })
     }
     return newFiles
   }
@@ -96,12 +122,6 @@ export class S3MediaStore implements MediaStore {
       items: items.map((item) => item),
       nextOffset: offset,
     }
-  }
-
-  // @ts-ignore
-  previewSrc = (publicId: string | Media): string => {
-    if (typeof publicId === 'string') return publicId
-    return publicId.previewSrc
   }
 
   parse = (img) => {

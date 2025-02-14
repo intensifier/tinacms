@@ -1,19 +1,7 @@
-/**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 import { collectConditionsForField, resolveReferences } from './filter-utils'
-import { ReferenceTypeInner, TinaFieldInner } from '../types'
-import { FilterCondition } from '@tinacms/datalayer'
+import { ReferenceType, TinaField } from '@tinacms/schema-tools'
+import { FilterCondition } from '../database/datalayer'
+import { describe, it, expect, vi } from 'vitest'
 
 describe('resolveReferences', () => {
   it('resolves reference to single item', async () => {
@@ -29,7 +17,7 @@ describe('resolveReferences', () => {
         eq: 'My Blog Post',
       },
     }
-    const fields: TinaFieldInner<false>[] = [
+    const fields: TinaField[] = [
       {
         type: 'reference',
         name: 'author',
@@ -45,10 +33,7 @@ describe('resolveReferences', () => {
     await resolveReferences(
       filter,
       fields,
-      (
-        filterParam: Record<string, object>,
-        fieldDefinition: ReferenceTypeInner
-      ) => {
+      (filterParam: Record<string, object>, fieldDefinition: ReferenceType) => {
         expect(filterParam).toEqual(filter)
         expect(fieldDefinition).toEqual(fields[0])
         const values = [filePath]
@@ -85,7 +70,7 @@ describe('resolveReferences', () => {
         },
       },
     }
-    const fields: TinaFieldInner<false>[] = [
+    const fields: TinaField[] = [
       {
         type: 'reference',
         name: 'author',
@@ -96,10 +81,7 @@ describe('resolveReferences', () => {
     await resolveReferences(
       filter,
       fields,
-      (
-        filterParam: Record<string, object>,
-        fieldDefinition: ReferenceTypeInner
-      ) => {
+      (filterParam: Record<string, object>, fieldDefinition: ReferenceType) => {
         expect(filterParam).toEqual(filter)
         expect(fieldDefinition).toEqual(fields[0])
         return Promise.resolve({
@@ -126,7 +108,7 @@ describe('resolveReferences', () => {
         },
       },
     }
-    const fields: TinaFieldInner<false>[] = [
+    const fields: TinaField[] = [
       {
         type: 'reference',
         name: 'author',
@@ -134,7 +116,7 @@ describe('resolveReferences', () => {
       },
     ]
 
-    const mockResolver = jest.fn()
+    const mockResolver = vi.fn()
     await expect(
       resolveReferences(filter, fields, mockResolver)
     ).rejects.toThrowError('Unable to find field silly')
@@ -150,7 +132,7 @@ describe('resolveReferences', () => {
         },
       },
     }
-    const fields: TinaFieldInner<false>[] = [
+    const fields: TinaField[] = [
       {
         type: 'reference',
         name: 'author',
@@ -174,10 +156,7 @@ describe('resolveReferences', () => {
     await resolveReferences(
       filter,
       fields,
-      (
-        filterParam: Record<string, object>,
-        fieldDefinition: ReferenceTypeInner
-      ) => {
+      (filterParam: Record<string, object>, fieldDefinition: ReferenceType) => {
         expect(filterParam).toEqual(filter)
         expect(fieldDefinition).toEqual(fields[0])
         return Promise.resolve({
@@ -206,7 +185,7 @@ describe('resolveReferences', () => {
         },
       },
     }
-    const fields: TinaFieldInner<false>[] = [
+    const fields: TinaField[] = [
       {
         type: 'object',
         name: 'details',
@@ -224,10 +203,7 @@ describe('resolveReferences', () => {
     await resolveReferences(
       filter,
       fields,
-      (
-        filterParam: Record<string, object>,
-        fieldDefinition: ReferenceTypeInner
-      ) => {
+      (filterParam: Record<string, object>, fieldDefinition: ReferenceType) => {
         expect(filterParam).toEqual(filter['details'])
         expect(fieldDefinition).toEqual((fields[0] as any).fields[0])
         const values = [filePath]
@@ -267,7 +243,7 @@ describe('resolveReferences', () => {
         },
       },
     }
-    const fields: TinaFieldInner<false>[] = [
+    const fields: TinaField[] = [
       {
         type: 'object',
         name: 'details',
@@ -291,10 +267,7 @@ describe('resolveReferences', () => {
     await resolveReferences(
       filter,
       fields,
-      (
-        filterParam: Record<string, object>,
-        fieldDefinition: ReferenceTypeInner
-      ) => {
+      (filterParam: Record<string, object>, fieldDefinition: ReferenceType) => {
         expect(filterParam).toEqual(filter['details']['authorTemplate'])
         expect(fieldDefinition).toEqual(
           (fields[0] as any).templates[0].fields[0]
@@ -338,7 +311,7 @@ describe('resolveReferences', () => {
         },
       },
     }
-    const fields: TinaFieldInner<false>[] = [
+    const fields: TinaField[] = [
       {
         type: 'object',
         name: 'details',
@@ -358,41 +331,11 @@ describe('resolveReferences', () => {
       },
     ]
 
-    const resolver = jest.fn()
+    const resolver = vi.fn()
     await expect(
       resolveReferences(filter, fields, resolver)
     ).rejects.toThrowErrorMatchingInlineSnapshot(
       `"Template nonExistentTemplate not found"`
-    )
-  })
-
-  it('resolves reference in object with template where filter references global template', async () => {
-    const filter = {
-      details: {
-        globalTemplate: {
-          author: {
-            authors: {
-              name: {
-                startsWith: 'Foo',
-              },
-            },
-          },
-        },
-      },
-    }
-    const fields: TinaFieldInner<false>[] = [
-      {
-        type: 'object',
-        name: 'details',
-        templates: ['globalTemplate'],
-      },
-    ]
-
-    const resolver = jest.fn()
-    await expect(
-      resolveReferences(filter, fields, resolver)
-    ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `"Global templates not yet supported for queries"`
     )
   })
 })
@@ -402,7 +345,7 @@ describe('collectConditionsForField', () => {
     const conditions: FilterCondition[] = []
     const collector = (condition: FilterCondition) => conditions.push(condition)
     const fieldName = 'age'
-    const field: TinaFieldInner<false> = {
+    const field: TinaField = {
       type: 'number',
       name: fieldName,
     }
@@ -414,6 +357,33 @@ describe('collectConditionsForField', () => {
       filterPath: fieldName,
       filterExpression: {
         _type: field.type,
+        _list: false,
+        ...filterExpression,
+      },
+    }
+    collectConditionsForField(fieldName, field, filterNode, '', collector)
+    expect(conditions).toHaveLength(1)
+    expect(conditions[0]).toEqual(expectedCondition)
+  })
+
+  it('collects conditions for simple filter on list field', () => {
+    const conditions: FilterCondition[] = []
+    const collector = (condition: FilterCondition) => conditions.push(condition)
+    const fieldName = 'age'
+    const field: TinaField = {
+      type: 'number',
+      list: true,
+      name: fieldName,
+    }
+    const filterExpression: Record<string, any> = {
+      gte: 18,
+    }
+    const filterNode = filterExpression
+    const expectedCondition: FilterCondition = {
+      filterPath: fieldName,
+      filterExpression: {
+        _type: field.type,
+        _list: true,
         ...filterExpression,
       },
     }
@@ -427,7 +397,7 @@ describe('collectConditionsForField', () => {
     const collector = (condition: FilterCondition) => conditions.push(condition)
     const parentFieldName = 'items'
     const childFieldName = 'age'
-    const field: TinaFieldInner<false> = {
+    const field: TinaField = {
       type: 'object',
       name: parentFieldName,
       list: true,
@@ -447,7 +417,8 @@ describe('collectConditionsForField', () => {
     const expectedCondition: FilterCondition = {
       filterPath: `${parentFieldName}[*].${childFieldName}`,
       filterExpression: {
-        _type: (field.fields[0] as TinaFieldInner<false>).type,
+        _type: (field.fields[0] as TinaField).type,
+        _list: false,
         ...filterExpression,
       },
     }
@@ -461,7 +432,7 @@ describe('collectConditionsForField', () => {
     const collector = (condition: FilterCondition) => conditions.push(condition)
     const parentFieldName = 'items'
     const childFieldName = 'age'
-    const field: TinaFieldInner<false> = {
+    const field: TinaField = {
       type: 'object',
       name: parentFieldName,
       list: false,
@@ -481,7 +452,8 @@ describe('collectConditionsForField', () => {
     const expectedCondition: FilterCondition = {
       filterPath: `${parentFieldName}.${childFieldName}`,
       filterExpression: {
-        _type: (field.fields[0] as TinaFieldInner<false>).type,
+        _type: (field.fields[0] as TinaField).type,
+        _list: false,
         ...filterExpression,
       },
     }
@@ -497,7 +469,7 @@ describe('collectConditionsForField', () => {
     const childFieldName = 'person'
     const grandchildFieldName = 'age'
     const type = 'number'
-    const field: TinaFieldInner<false> = {
+    const field: TinaField = {
       type: 'object',
       name: parentFieldName,
       list: false,
@@ -526,6 +498,7 @@ describe('collectConditionsForField', () => {
       filterPath: `${parentFieldName}.${childFieldName}.${grandchildFieldName}`,
       filterExpression: {
         _type: type,
+        _list: false,
         ...filterExpression,
       },
     }
@@ -539,7 +512,7 @@ describe('collectConditionsForField', () => {
     const collector = (condition: FilterCondition) => conditions.push(condition)
     const parentFieldName = 'items'
     const childFieldName = 'age'
-    const field: TinaFieldInner<false> = {
+    const field: TinaField = {
       type: 'object',
       name: parentFieldName,
       list: true,
@@ -577,7 +550,7 @@ describe('collectConditionsForField', () => {
     const childFieldName = 'age'
     const templateName = 'features'
     const childType = 'number'
-    const field: TinaFieldInner<false> = {
+    const field: TinaField = {
       type: 'object',
       name: parentFieldName,
       list: true,
@@ -606,6 +579,7 @@ describe('collectConditionsForField', () => {
       filterPath: `${parentFieldName}[?(@._template=="${templateName}")].${childFieldName}`,
       filterExpression: {
         _type: childType,
+        _list: false,
         ...filterExpression,
       },
     }
@@ -622,7 +596,7 @@ describe('collectConditionsForField', () => {
     const childFieldName = 'age'
     const templateName = 'features'
     const childType = 'number'
-    const field: TinaFieldInner<false> = {
+    const field: TinaField = {
       type: 'object',
       name: rootFieldName,
       fields: [
@@ -659,43 +633,12 @@ describe('collectConditionsForField', () => {
       filterPath: `${rootFieldName}.${parentFieldName}[?(@._template=="${templateName}")].${childFieldName}`,
       filterExpression: {
         _type: childType,
+        _list: false,
         ...filterExpression,
       },
     }
     collectConditionsForField(rootFieldName, field, filterNode, '', collector)
     expect(conditions).toHaveLength(1)
     expect(conditions[0]).toEqual(expectedCondition)
-  })
-
-  it('fails with global template', () => {
-    const conditions: FilterCondition[] = []
-    const collector = (condition: FilterCondition) => conditions.push(condition)
-    const parentFieldName = 'items'
-    const templateName = 'my-global-template'
-    const field: TinaFieldInner<false> = {
-      type: 'object',
-      name: parentFieldName,
-      list: true,
-      templates: [templateName],
-    }
-    const filterExpression: Record<string, any> = {
-      gte: 18,
-    }
-    const filterNode = {
-      [templateName]: {
-        age: filterExpression,
-      },
-    }
-    expect(() => {
-      collectConditionsForField(
-        parentFieldName,
-        field,
-        filterNode,
-        '',
-        collector
-      )
-    }).toThrowErrorMatchingInlineSnapshot(
-      `"Global templates not yet supported for queries"`
-    )
   })
 })

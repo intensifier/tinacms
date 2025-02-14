@@ -1,14 +1,5 @@
 /**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+
 */
 
 import { Router } from 'express'
@@ -17,7 +8,11 @@ import multer from 'multer'
 import { MediaModel, PathConfig } from '../models/media'
 
 export const createMediaRouter = (config: PathConfig): Router => {
-  const mediaFolder = join(process.cwd(), config.publicFolder, config.mediaRoot)
+  const mediaFolder = join(
+    config.rootPath,
+    config.publicFolder,
+    config.mediaRoot
+  )
   const storage = multer.diskStorage({
     destination: function (req, file, cb) {
       cb(null, mediaFolder)
@@ -29,6 +24,7 @@ export const createMediaRouter = (config: PathConfig): Router => {
   })
 
   const upload = multer({ storage })
+  const uploadRoute = upload.single('file')
 
   const mediaModel = new MediaModel(config)
 
@@ -52,10 +48,19 @@ export const createMediaRouter = (config: PathConfig): Router => {
     res.json(didDelete)
   })
 
-  mediaRouter.post('/upload/*', upload.single('file'), function (req, res) {
-    // req.files is array of `photos` files
-    // req.body will contain the text fields, if there were any
-    res.json({ success: true })
+  mediaRouter.post('/upload/*', async function (req, res) {
+    // do it this way for better error handling
+    await uploadRoute(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        res.status(500).json({ message: err.message })
+        // A Multer error occurred when uploading.
+      } else if (err) {
+        // An unknown error occurred when uploading.
+        res.status(500).json({ message: err.message })
+      } else {
+        res.json({ success: true })
+      }
+    })
   })
 
   return mediaRouter

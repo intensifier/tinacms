@@ -1,19 +1,11 @@
 /**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+
 */
 
 import React from 'react'
 import { useCMS } from '@tinacms/toolkit'
 import { ContentCreatorPlugin, OnNewDocument } from './create-page-plugin'
+import { Template } from '@tinacms/schema-tools'
 
 export type FilterCollections = (
   options: {
@@ -41,7 +33,14 @@ export const useDocumentCreatorPlugin = (args?: DocumentCreatorArgs) => {
       /**
        * Query for Collections and Templates
        */
-      const res = await cms.api.tina.request(
+      const res: {
+        collections: {
+          label?: string
+          slug: string
+          format: string
+          templates: Template[]
+        }[]
+      } = await cms.api.tina.request(
         (gql) => gql`
           {
             collections {
@@ -95,6 +94,7 @@ export const useDocumentCreatorPlugin = (args?: DocumentCreatorArgs) => {
           (c) => c.slug === values.collection
         )
         filteredCollection?.templates?.forEach((template) => {
+          // @ts-ignore
           templateOptions.push({ value: template.name, label: template.label })
         })
       }
@@ -106,6 +106,7 @@ export const useDocumentCreatorPlugin = (args?: DocumentCreatorArgs) => {
         new ContentCreatorPlugin({
           label: 'Add Document',
           onNewDocument: args && args.onNewDocument,
+          // @ts-ignore
           collections: res.collections,
           onChange: async ({ values }) => {
             setValues(values)

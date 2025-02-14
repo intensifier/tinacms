@@ -1,74 +1,57 @@
 /**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+
 */
 
-import _ from 'lodash'
-import fs from 'fs-extra'
-import { print, OperationDefinitionNode, DocumentNode } from 'graphql'
+import { print, type OperationDefinitionNode } from 'graphql'
+import type { TinaSchema, Config } from '@tinacms/schema-tools'
 import type { FragmentDefinitionNode, FieldDefinitionNode } from 'graphql'
+import uniqBy from 'lodash.uniqby'
 
 import { astBuilder, NAMER } from './ast-builder'
 import { sequential } from './util'
 import { createBuilder } from './builder'
-import { createSchema } from './schema'
+import { createSchema } from './schema/createSchema'
 import { extractInlineTypes } from './ast-builder'
-import path from 'path'
 
 import type { Builder } from './builder'
-import type { TinaSchema } from './schema'
-import { Database } from './database'
 
 export const buildDotTinaFiles = async ({
-  database,
   config,
   flags = [],
   buildSDK = true,
 }: {
-  database: Database
-  config: TinaSchema['config']
+  config: Config
   flags?: string[]
   buildSDK?: boolean
 }) => {
-  if (database.store.supportsIndexing()) {
-    if (flags.indexOf('experimentalData') === -1) {
-      flags.push('experimentalData')
-    }
+  if (flags.indexOf('experimentalData') === -1) {
+    flags.push('experimentalData')
   }
-  const tinaSchema = await createSchema({ schema: config, flags })
+  const { schema } = config
+  const tinaSchema = await createSchema({
+    schema: { ...schema, config },
+    flags,
+  })
   const builder = await createBuilder({
-    database,
     tinaSchema,
   })
-  let graphQLSchema: DocumentNode
-  if (database.bridge.supportsBuilding()) {
-    graphQLSchema = await _buildSchema(builder, tinaSchema)
-    await database.putConfigFiles({ graphQLSchema, tinaSchema })
-  } else {
-    graphQLSchema = JSON.parse(
-      await database.bridge.get('.tina/__generated__/_graphql.json')
-    )
-  }
+  const graphQLSchema = await _buildSchema(builder, tinaSchema)
+  let fragDoc = ''
+  let queryDoc = ''
   if (buildSDK) {
-    await _buildFragments(builder, tinaSchema, database.bridge.rootPath)
-    await _buildQueries(builder, tinaSchema, database.bridge.rootPath)
+    fragDoc = await _buildFragments(builder, tinaSchema)
+    queryDoc = await _buildQueries(builder, tinaSchema)
   }
-  return { graphQLSchema, tinaSchema }
+  return {
+    graphQLSchema,
+    tinaSchema,
+    lookup: builder.lookupMap,
+    fragDoc,
+    queryDoc,
+  }
 }
 
-const _buildFragments = async (
-  builder: Builder,
-  tinaSchema: TinaSchema,
-  rootPath: string
-) => {
+const _buildFragments = async (builder: Builder, tinaSchema: TinaSchema) => {
   const fragmentDefinitionsFields: FragmentDefinitionNode[] = []
   const collections = tinaSchema.getCollections()
 
@@ -82,48 +65,17 @@ const _buildFragments = async (
 
   const fragDoc = {
     kind: 'Document' as const,
-    definitions: _.uniqBy(
+    definitions: uniqBy(
       // @ts-ignore
       extractInlineTypes(fragmentDefinitionsFields),
       (node) => node.name.value
     ),
   }
 
-  // TODO: These should possibly be outputted somewhere else?
-  const fragPath = path.join(rootPath, '.tina', '__generated__')
-
-  await fs.outputFile(path.join(fragPath, 'frags.gql'), print(fragDoc))
-  // is the file bigger then 100kb?
-  if (
-    (await (await fs.stat(path.join(fragPath, 'frags.gql'))).size) >
-    // convert to 100 kb to bytes
-    100 * 1024
-  ) {
-    console.warn(
-      'Warning: frags.gql is very large (>100kb). Consider setting the reference depth to 1 or 0. See code snippet below.'
-    )
-    console.log(
-      `const schema = defineSchema({
-        config: {
-            client: {
-                referenceDepth: 1,
-            },
-        }
-        // ...
-    })`
-    )
-  }
-  //   await fs.outputFileSync(
-  //     path.join(fragPath, 'frags.json'),
-  //     JSON.stringify(fragDoc, null, 2)
-  //   )
+  return print(fragDoc)
 }
 
-const _buildQueries = async (
-  builder: Builder,
-  tinaSchema: TinaSchema,
-  rootPath: string
-) => {
+const _buildQueries = async (builder: Builder, tinaSchema: TinaSchema) => {
   const operationsDefinitions: OperationDefinitionNode[] = []
 
   const collections = tinaSchema.getCollections()
@@ -155,21 +107,14 @@ const _buildQueries = async (
 
   const queryDoc = {
     kind: 'Document' as const,
-    definitions: _.uniqBy(
+    definitions: uniqBy(
       // @ts-ignore
       extractInlineTypes(operationsDefinitions),
       (node) => node.name.value
     ),
   }
 
-  const fragPath = path.join(rootPath, '.tina', '__generated__')
-
-  await fs.outputFile(path.join(fragPath, 'queries.gql'), print(queryDoc))
-  // We dont this them for now
-  // await fs.outputFileSync(
-  //   path.join(fragPath, 'queries.json'),
-  //   JSON.stringify(queryDoc, null, 2)
-  // )
+  return print(queryDoc)
 }
 
 const _buildSchema = async (builder: Builder, tinaSchema: TinaSchema) => {
@@ -177,7 +122,7 @@ const _buildSchema = async (builder: Builder, tinaSchema: TinaSchema) => {
    * Definitions for the GraphQL AST
    */
   const definitions = []
-  definitions.push(await builder.buildStaticDefinitions())
+  definitions.push(builder.buildStaticDefinitions())
   const queryTypeDefinitionFields: FieldDefinitionNode[] = []
   const mutationTypeDefinitionFields: FieldDefinitionNode[] = []
 
@@ -224,12 +169,27 @@ const _buildSchema = async (builder: Builder, tinaSchema: TinaSchema) => {
   mutationTypeDefinitionFields.push(
     await builder.buildCreateCollectionDocumentMutation(collections)
   )
+  mutationTypeDefinitionFields.push(
+    await builder.buildCreateCollectionFolderMutation()
+  )
 
   /**
    * Collection queries/mutations/fragments
    */
   await sequential(collections, async (collection) => {
     queryTypeDefinitionFields.push(await builder.collectionDocument(collection))
+
+    if (collection.isAuthCollection) {
+      queryTypeDefinitionFields.push(
+        await builder.authenticationCollectionDocument(collection)
+      )
+      queryTypeDefinitionFields.push(
+        await builder.authorizationCollectionDocument(collection)
+      )
+      mutationTypeDefinitionFields.push(
+        await builder.updatePasswordMutation(collection)
+      )
+    }
 
     mutationTypeDefinitionFields.push(
       await builder.updateCollectionDocumentMutation(collection)
@@ -255,14 +215,12 @@ const _buildSchema = async (builder: Builder, tinaSchema: TinaSchema) => {
     })
   )
 
-  const doc = {
+  return {
     kind: 'Document' as const,
-    definitions: _.uniqBy(
+    definitions: uniqBy(
       // @ts-ignore
       extractInlineTypes(definitions),
       (node) => node.name.value
     ),
   }
-
-  return doc
 }

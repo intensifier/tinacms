@@ -1,43 +1,23 @@
 /**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+
 */
 
-import { TinaFieldEnriched } from '../types'
-import { TinaSchema } from './TinaSchema'
+import type { TinaField } from '../types/index'
+import type { TinaSchema } from './TinaSchema'
 import { lastItem, NAMER } from '../util'
 
 /**
- *
  * Turns a field the schema (schema.{js,ts} file) into a valid front end FieldConfig
- *
- *
- * @param  {TinaFieldEnriched} field. The field that will be transformed
- * @param  {TinaSchema} schema the entireT Tina Schema
- * @returns unknown
  */
 export const resolveField = (
-  field: TinaFieldEnriched,
+  field: TinaField<true>,
   schema: TinaSchema
 ): {
   [key: string]: unknown
   name: string
-  component: string
+  component: NonNullable<TinaField<true>['ui']>['component']
   type: string
 } => {
-  field
-  field.parentTypename = NAMER.dataTypeName(
-    // Get the type of the parent namespace
-    field.namespace.filter((_, i) => i < field.namespace.length - 1)
-  )
   const extraFields = field.ui || {}
   switch (field.type) {
     case 'number':
@@ -59,6 +39,16 @@ export const resolveField = (
         ...extraFields,
       }
     case 'image':
+      if (field.list) {
+        return {
+          component: 'list',
+          field: {
+            component: 'image',
+          },
+          ...field,
+          ...extraFields,
+        }
+      }
       return {
         component: 'image',
         clearable: true,
@@ -67,11 +57,21 @@ export const resolveField = (
       }
     case 'string':
       if (field.options) {
-        // TODO: correct the type
-        // @ts-ignore
         if (field.list) {
           return {
             component: 'checkbox-group',
+            ...field,
+            ...extraFields,
+            options: field.options,
+          }
+        }
+        if (
+          field.options[0] &&
+          typeof field.options[0] === 'object' &&
+          field.options[0].icon
+        ) {
+          return {
+            component: 'button-toggle',
             ...field,
             ...extraFields,
             options: field.options,
@@ -81,11 +81,12 @@ export const resolveField = (
           component: 'select',
           ...field,
           ...extraFields,
-          options: [{ label: `Choose an option`, value: '' }, ...field.options],
+          options:
+            field.ui && field.ui.component !== 'select'
+              ? field.options
+              : [{ label: 'Choose an option', value: '' }, ...field.options],
         }
       }
-      // TODO: correct the type
-      // @ts-ignore
       if (field.list) {
         return {
           // Allows component to be overridden for scalars
@@ -103,7 +104,7 @@ export const resolveField = (
         ...field,
         ...extraFields,
       }
-    case 'object':
+    case 'object': {
       const templateInfo = schema.getTemplatesForCollectable(field)
       if (templateInfo.type === 'object') {
         // FIXME: need to finish group/group-list
@@ -123,7 +124,6 @@ export const resolveField = (
           const templateName = lastItem(template.namespace)
           typeMap[templateName] = NAMER.dataTypeName(template.namespace)
           templates[lastItem(template.namespace)] = {
-            // @ts-ignore FIXME `Templateable` should have name and label properties
             label: template.label || templateName,
             key: templateName,
             namespace: [...field.namespace, templateName],
@@ -144,6 +144,7 @@ export const resolveField = (
       } else {
         throw new Error(`Unknown object for resolveField function`)
       }
+    }
     case 'rich-text':
       const templates: { [key: string]: object } = {}
       const typeMap: { [key: string]: string } = {}
@@ -152,13 +153,11 @@ export const resolveField = (
           throw new Error(`Global templates not yet supported for rich-text`)
         } else {
           const extraFields = template.ui || {}
-          // console.log({ namespace: template.namespace })
 
           // template.namespace is undefined
           const templateName = lastItem(template.namespace)
           typeMap[templateName] = NAMER.dataTypeName(template.namespace)
           templates[lastItem(template.namespace)] = {
-            // @ts-ignore FIXME `Templateable` should have name and label properties
             label: template.label || templateName,
             key: templateName,
             inline: template.inline,
@@ -174,6 +173,12 @@ export const resolveField = (
         ...field,
         templates: Object.values(templates),
         component: 'rich-text',
+        ...extraFields,
+      }
+    case 'password':
+      return {
+        component: 'password',
+        ...field,
         ...extraFields,
       }
     case 'reference':

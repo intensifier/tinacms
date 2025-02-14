@@ -1,35 +1,25 @@
 /**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+
 */
 
 import path from 'path'
 import { setupFixture, setupFixture2, print, Fixture } from '../setup'
 import { tinaSchema } from './.tina/schema'
+import { MemoryLevel } from 'memory-level'
+import {
+  describe,
+  beforeEach,
+  afterEach,
+  expect,
+  it,
+  vi,
+  SpyInstance,
+} from 'vitest'
 const rootPath = path.join(__dirname, '/')
-import { LevelStore } from '@tinacms/datalayer'
 
-class FilesystemStoreTest extends LevelStore {
-  constructor(rootPath: string, useMemory: boolean = false) {
-    super(rootPath, useMemory)
-  }
-  public supportsSeeding() {
-    return true
-  }
-  public supportsIndexing() {
-    return false
-  }
-}
-
-const store = new FilesystemStoreTest(rootPath, true)
+const level = new MemoryLevel<string, Record<string, any>>({
+  valueEncoding: 'json',
+})
 
 const fixtures: Fixture[] = [
   {
@@ -69,13 +59,13 @@ const mutationFixtures: Fixture[] = [
     name: 'updateDocument',
     description: 'Updating a document works',
     assert: 'file',
-    filename: 'content/movies/star-wars.md',
+    filename: 'content/movies/star-wars.mdx',
   },
 ]
 
-let consoleErrMock
+let consoleErrMock: SpyInstance
 beforeEach(() => {
-  consoleErrMock = jest.spyOn(console, 'error').mockImplementation()
+  consoleErrMock = vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 afterEach(() => {
   consoleErrMock.mockRestore()
@@ -87,7 +77,7 @@ describe('A schema without indexing', () => {
       const { responses, expectedResponsePaths } = await setupFixture(
         rootPath,
         tinaSchema,
-        store,
+        level,
         fixture,
         'movies'
       )
@@ -109,7 +99,7 @@ describe('A schema without indexing', () => {
       const { responses, expectedResponsePaths } = await setupFixture2(
         rootPath,
         tinaSchema,
-        store,
+        level,
         fixture,
         'movies',
         '_mutation',

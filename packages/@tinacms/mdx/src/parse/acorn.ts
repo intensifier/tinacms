@@ -1,43 +1,25 @@
-/**
-
-Copyright 2021 Forestry.io Holdings, Inc.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-*/
 import type {
   MdxJsxAttribute,
   MdxJsxAttributeValueExpression,
   MdxJsxExpressionAttribute,
 } from 'mdast-util-mdx-jsx'
-import type { JSXFragment, JSXText } from 'estree-jsx'
 import type { ExpressionStatement, ObjectExpression, Property } from 'estree'
-import type { TinaFieldBase } from '@tinacms/schema-tools'
+import type { TinaField } from '@tinacms/schema-tools'
 import { MDX_PARSE_ERROR_MSG, parseMDX } from '.'
 
 type TinaStringField =
-  | Extract<TinaFieldBase, { type: 'string' }>
-  | Extract<TinaFieldBase, { type: 'datetime' }>
-  | Extract<TinaFieldBase, { type: 'image' }>
-  | Extract<TinaFieldBase, { type: 'reference' }>
+  | Extract<TinaField, { type: 'string' }>
+  | Extract<TinaField, { type: 'datetime' }>
+  | Extract<TinaField, { type: 'image' }>
+  | Extract<TinaField, { type: 'reference' }>
 
 export const extractAttributes = (
   attributes: (MdxJsxAttribute | MdxJsxExpressionAttribute)[],
-  fields: TinaFieldBase[],
+  fields: TinaField[],
   imageCallback: (image: string) => string
 ) => {
   const properties: Record<string, unknown> = {}
-  attributes.forEach((attribute) => {
+  attributes?.forEach((attribute) => {
     assertType(attribute, 'mdxJsxAttribute')
     const field = fields.find((field) => field.name === attribute.name)
     if (!field) {
@@ -64,7 +46,7 @@ export const extractAttributes = (
 }
 const extractAttribute = (
   attribute: MdxJsxAttribute,
-  field: TinaFieldBase,
+  field: TinaField,
   imageCallback: (image: string) => string
 ) => {
   switch (field.type) {
@@ -96,28 +78,22 @@ const extractAttribute = (
         return extractString(attribute, field)
       }
     case 'object':
-      return extractObject(extractExpression(attribute), field)
+      return extractObject(extractExpression(attribute), field, imageCallback)
     case 'rich-text':
-      const JSXString = extractJSXFragment(
-        // @ts-ignore FIXME: estree-jsx needs to be merged with estree
-        extractExpression(attribute),
-        attribute,
-        field
-      )
+      const JSXString = extractRaw(attribute)
       if (JSXString) {
         return parseMDX(JSXString, field, imageCallback)
       } else {
         return {}
       }
     default:
-      // @ts-expect-error
       throw new Error(`Extract attribute: Unhandled field type ${field.type}`)
   }
 }
 
 const extractScalar = <
   T extends Extract<
-    TinaFieldBase,
+    TinaField,
     | { type: 'string' }
     | { type: 'boolean' }
     | { type: 'number' }
@@ -142,37 +118,39 @@ const extractScalar = <
   }
 }
 
-const extractObject = <T extends Extract<TinaFieldBase, { type: 'object' }>>(
+const extractObject = <T extends Extract<TinaField, { type: 'object' }>>(
   attribute: ExpressionStatement,
-  field: T
+  field: T,
+  imageCallback: (image: string) => string
 ) => {
   if (field.list) {
     assertType(attribute.expression, 'ArrayExpression')
     return attribute.expression.elements.map((element) => {
       assertHasType(element)
       assertType(element, 'ObjectExpression')
-      return extractObjectExpression(element, field)
+      return extractObjectExpression(element, field, imageCallback)
     })
   } else {
     assertType(attribute.expression, 'ObjectExpression')
-    return extractObjectExpression(attribute.expression, field)
+    return extractObjectExpression(attribute.expression, field, imageCallback)
   }
 }
 const extractObjectExpression = (
   expression: ObjectExpression,
-  field: Extract<TinaFieldBase, { type: 'object' }>
+  field: Extract<TinaField, { type: 'object' }>,
+  imageCallback: (image: string) => string
 ) => {
   const properties: Record<string, unknown> = {}
-  expression.properties.forEach((property) => {
+  expression.properties?.forEach((property) => {
     assertType(property, 'Property')
-    const { key, value } = extractKeyValue(property, field)
+    const { key, value } = extractKeyValue(property, field, imageCallback)
     properties[key] = value
   })
   return properties
 }
 
 const getField = (
-  objectField: Extract<TinaFieldBase, { type: 'object' }>,
+  objectField: Extract<TinaField, { type: 'object' }>,
   name: string
 ) => {
   if (objectField.fields) {
@@ -183,32 +161,10 @@ const getField = (
   }
 }
 
-const extractJSXFragment = <
-  T extends Extract<TinaFieldBase, { type: 'rich-text' }>
->(
-  attribute: { expression: JSXFragment },
-  baseAttribute: MdxJsxAttribute,
-  field: T
-) => {
-  if (field.list) {
-  } else {
-    if (attribute.expression.type === 'JSXFragment') {
-      assertHasType(attribute.expression)
-      if (attribute.expression.children[0]) {
-        const firstChild = attribute.expression.children[0]
-        if (attribute.expression.children[0].type === 'JSXText') {
-          const child = firstChild as JSXText
-          return child.value.trim()
-        }
-      }
-    }
-  }
-  throwError(field)
-}
-
 const extractKeyValue = (
   property: Property,
-  parentField: Extract<TinaFieldBase, { type: 'object' }>
+  parentField: Extract<TinaField, { type: 'object' }>,
+  imageCallback: (image: string) => string
 ) => {
   assertType(property.key, 'Identifier')
   const key = property.key.name
@@ -219,14 +175,33 @@ const extractKeyValue = (
       const value = property.value.elements.map((element) => {
         assertHasType(element)
         assertType(element, 'ObjectExpression')
-        return extractObjectExpression(element, field)
+        return extractObjectExpression(element, field, imageCallback)
       })
       return { key, value }
     } else {
       assertType(property.value, 'ObjectExpression')
-      const value = extractObjectExpression(property.value, field)
+      const value = extractObjectExpression(
+        property.value,
+        field,
+        imageCallback
+      )
       return { key, value }
     }
+  } else if (field?.list) {
+    assertType(property.value, 'ArrayExpression')
+    const value = property.value.elements.map((element) => {
+      assertHasType(element)
+      assertType(element, 'Literal')
+      return element.value
+    })
+    return { key, value }
+  } else if (field?.type === 'rich-text') {
+    assertType(property.value, 'Literal')
+    const raw = property.value.value
+    if (typeof raw === 'string') {
+      return { key, value: parseMDX(raw, field, imageCallback) }
+    }
+    throw new Error(`Unable to parse rich-text`)
   } else {
     assertType(property.value, 'Literal')
     return { key, value: property.value.value }
@@ -269,6 +244,31 @@ const extractExpression = (attribute: MdxJsxAttribute): ExpressionStatement => {
   return extractStatement(attribute.value)
 }
 
+/**
+ * When rich-text is nested in non-children elements, we use a
+ * fragment to denote it's MDX:
+ *
+ * ```mdx
+ * ## hello
+ *
+ * <MyComponent description={<>
+ *   # My nested description
+ * </>}>
+ *   ## Some children
+ * </MyComponent>
+ * ```
+ * This grabs the inner fragment and strips out the `<></>` portions
+ * so when we pass it into our parser it's treated as markdown instead
+ * of an expression
+ */
+const extractRaw = (attribute: MdxJsxAttribute): string => {
+  assertType(attribute, 'mdxJsxAttribute')
+  assertHasType(attribute.value)
+  assertType(attribute.value, 'mdxJsxAttributeValueExpression')
+  const rawValue = attribute.value.value
+  return trimFragments(rawValue)
+}
+
 function assertType<T extends { type: string }, U extends T['type']>(
   val: T,
   type: U
@@ -291,10 +291,28 @@ function assertHasType(
   throw new Error(`Expect value to be an object with property "type"`)
 }
 
-const throwError = (field: TinaFieldBase) => {
-  throw new Error(
-    `Unexpected expression for field "${field.name}"${
-      field.list ? ' with "list": true' : ''
-    }`
-  )
+export const trimFragments = (string: string) => {
+  const rawArr = string.split('\n')
+  let openingFragmentIndex: number | null = null
+  let closingFragmentIndex: number | null = null
+  rawArr.forEach((item, index) => {
+    if (item.trim() === '<>') {
+      if (!openingFragmentIndex) {
+        openingFragmentIndex = index + 1
+      }
+    }
+  })
+  rawArr.reverse().forEach((item, index) => {
+    if (item.trim() === '</>') {
+      const length = rawArr.length - 1
+      if (!closingFragmentIndex) {
+        closingFragmentIndex = length - index
+      }
+    }
+  })
+  const value = rawArr
+    .reverse()
+    .slice(openingFragmentIndex || 0, closingFragmentIndex || rawArr.length - 1)
+    .join('\n')
+  return value
 }

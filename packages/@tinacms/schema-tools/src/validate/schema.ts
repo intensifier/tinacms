@@ -1,28 +1,28 @@
-/**
-Copyright 2021 Forestry.io Holdings, Inc.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 import { z } from 'zod'
 import { name } from './properties'
 import { findDuplicates } from '../util'
 import { TinaFieldZod } from './fields'
 import { tinaConfigZod } from './tinaCloudSchemaConfig'
-const FORMATS = ['json', 'md', 'markdown', 'mdx'] as const
+import {
+  duplicateCollectionErrorMessage,
+  duplicateFieldErrorMessage,
+} from './util'
+const FORMATS = [
+  'json',
+  'md',
+  'markdown',
+  'mdx',
+  'toml',
+  'yaml',
+  'yml',
+] as const
 
 const Template = z
   .object({
     label: z.string({
-      invalid_type_error: 'label must be a string',
-      required_error: 'label was not provided but is required',
+      invalid_type_error:
+        'Invalid data type for property `label`. Must be of type `string`',
+      required_error: 'Missing `label` property. Property `label` is required.',
     }),
     name: name,
     fields: z.array(TinaFieldZod),
@@ -32,67 +32,121 @@ const Template = z
     if (dups) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `Fields must have a unique name, duplicate field names: ${dups}`,
+        message: duplicateFieldErrorMessage(dups),
       })
     }
   })
 
-const TinaCloudCollectionBase = z.object({
+export const CollectionBaseSchema = z.object({
   label: z.string().optional(),
-  name: name,
-  format: z.enum(FORMATS).optional(),
-})
-
-// Zod did not handel this union very well so we will handle it ourselves
-const TinaCloudCollection = TinaCloudCollectionBase.extend({
-  fields: z
-    .array(TinaFieldZod)
-    .min(1)
-    .optional()
+  name: name.superRefine((val, ctx) => {
+    if (val === 'relativePath') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "Invalid `name` property. `name` cannot be 'relativePath' as it is a reserved field name.",
+      })
+    }
+  }),
+  path: z
+    .string()
+    .transform((val) => val.replace(/^\/|\/$/g, ''))
     .superRefine((val, ctx) => {
-      const dups = findDuplicates(val?.map((x) => x.name))
-      if (dups) {
+      if (val === '.') {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Fields must have a unique name, duplicate field names: ${dups}`,
-        })
-      }
-    })
-    .refine(
-      // It is valid if it is 0 or 1
-      (val) => {
-        const arr = val?.filter((x) => x.type === 'string' && x.isTitle) || []
-        return arr.length < 2
-      },
-      {
-        message: 'Fields can only have one use of `isTitle`',
-      }
-    ),
-  templates: z
-    .array(Template)
-    .min(1)
-    .optional()
-    .superRefine((val, ctx) => {
-      const dups = findDuplicates(val?.map((x) => x.name))
-      if (dups) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Templates must have a unique name, duplicate template names: ${dups}`,
+          message:
+            "Invalid `path` property. `path` cannot be '.'. Please use '/' or '' instead.",
         })
       }
     }),
-}).refine(
-  (val) => {
-    let isValid = Boolean(val?.templates) || Boolean(val?.fields)
-    if (!isValid) {
-      return false
-    } else {
-      isValid = !(val?.templates && val?.fields)
-      return isValid
-    }
-  },
-  { message: 'Must provide one of templates or fields in your collection' }
-)
+  format: z.enum(FORMATS).optional(),
+  isAuthCollection: z.boolean().optional(),
+  isDetached: z.boolean().optional(),
+})
+
+// Zod did not handel this union very well so we will handle it ourselves
+const TinaCloudCollection = CollectionBaseSchema.extend({
+  fields: z
+    .array(TinaFieldZod)
+    .min(1, 'Property `fields` cannot be empty.')
+    .optional()
+    .superRefine((val, ctx) => {
+      const dups = findDuplicates(val?.map((x) => x.name))
+      if (dups) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: duplicateFieldErrorMessage(dups),
+        })
+      }
+    })
+    .superRefine((val, ctx) => {
+      const arr = val?.filter((x) => x.type === 'string' && x.isTitle) || []
+      if (arr.length > 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `The following fields have the property \`isTitle\`: [${arr
+            .map((field) => field.name)
+            .join(', ')}]. Only one can contain the property \`isTitle\`.`,
+        })
+      }
+    })
+    .superRefine((val, ctx) => {
+      const arr = val?.filter((x) => x.uid) || []
+      if (arr.length > 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `The following fields have the property \`uid\`: [${arr
+            .map((field) => field.name)
+            .join(', ')}]. Only one can contain the property \`uid\`.`,
+        })
+      }
+    })
+    .superRefine((val, ctx) => {
+      const arr = val?.filter((x) => x.type === 'password') || []
+      if (arr.length > 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `The following fields have \`type: password\`: [${arr
+            .map((field) => field.name)
+            .join(', ')}]. Only one can be of \`type: password\`.`,
+        })
+      }
+    }),
+  templates: z
+    .array(Template)
+    .min(1, 'Property `templates` cannot be empty.')
+    .optional()
+    .superRefine((val, ctx) => {
+      const dups = findDuplicates(val?.map((x) => x.name))
+      if (dups) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: duplicateFieldErrorMessage(dups),
+        })
+      }
+    }),
+}).superRefine((val, ctx) => {
+  // Must have at least one of these fields.
+  if (!val?.templates && !val?.fields) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'Fields of `type: object` must have either `templates` or `fields` property.',
+    })
+    return false
+  }
+
+  // Cannot have both of these fields.
+  if (val?.templates && val?.fields) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'Fields of `type: object` must have either `templates` or `fields` property, not both.',
+    })
+    return false
+  }
+})
 
 export const TinaCloudSchemaZod = z
   .object({
@@ -104,25 +158,38 @@ export const TinaCloudSchemaZod = z
     if (dups) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `${dups} are duplicate names in your collections. Collection names must be unique.`,
+        message: duplicateCollectionErrorMessage(dups),
         fatal: true,
       })
     }
-    val?.collections?.map((x) => {
-      if (!x.format) {
-        console.warn(
-          `No format provided for collection ${x.name}, defaulting to .md`
-        )
-      }
-    })
+
+    if (val.collections?.filter((x) => x.isAuthCollection).length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Only one collection can be marked as `isAuthCollection`.',
+        fatal: true,
+      })
+    }
+
     const media = val?.config?.media
     if (media && media.tina && media.loadCustomStore) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message:
-          'can not have both loadCustomStore and tina. Must use one or the other',
+          'Cannot have both `loadCustomStore` and `tina`. Must use one or the other.',
         fatal: true,
         path: ['config', 'media'],
+      })
+    }
+
+    const search = val?.config?.search
+    if (search && search.tina && search.searchClient) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'Cannot have both `searchClient` and `tina`. Must use one or the other.',
+        fatal: true,
+        path: ['config', 'search'],
       })
     }
   })
